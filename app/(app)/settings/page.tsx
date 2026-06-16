@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Camera, KeyRound, Save, Trash2, UserRound } from "lucide-react";
+import { Building2, Camera, KeyRound, MapPin, Plus, Save, Store, Trash2, UserRound } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, InlineMessage, LoadingState } from "@/components/async-state";
 import { Hint } from "@/components/ui";
@@ -10,8 +10,8 @@ import { api, toast } from "@/lib/client";
 
 type Me = { id: string; name: string; email: string; image: string | null; companyStatus: string; permissions: string[] };
 type Setting = { id: string; key: string; value: unknown };
+type StoreRecord = { id: string; name: string; code: string; location: string | null; _count: { users: number; customers: number; orders: number } };
 
-// Downscale a chosen image to a small JPEG data URL before upload.
 function resizeImage(file: File, max = 256): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -46,6 +46,7 @@ export default function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [settings, setSettings] = useState<Setting[]>([]);
+  const [stores, setStores] = useState<StoreRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [name, setName] = useState("");
@@ -61,6 +62,12 @@ export default function SettingsPage() {
   const [value, setValue] = useState("");
   const [savingSetting, setSavingSetting] = useState(false);
 
+  const [storeForm, setStoreForm] = useState({ name: "", code: "", location: "" });
+  const [savingStore, setSavingStore] = useState(false);
+  const [storeError, setStoreError] = useState("");
+  const [showStoreForm, setShowStoreForm] = useState(false);
+
+  const isOwner = me?.companyStatus === "OWNER";
   const canEditBusiness = me?.permissions.includes("settings.edit") ?? false;
 
   async function load() {
@@ -71,8 +78,12 @@ export default function SettingsPage() {
       setName(meResult.user.name);
       setImage(meResult.user.image);
       try {
-        const data = await api<{ settings: Setting[] }>("/api/settings");
-        setSettings(data.settings || []);
+        const [settingsData, storesData] = await Promise.all([
+          api<{ settings: Setting[] }>("/api/settings"),
+          api<{ stores: StoreRecord[] }>("/api/stores"),
+        ]);
+        setSettings(settingsData.settings || []);
+        setStores(storesData.stores || []);
       } catch {
         setSettings([]);
       }
@@ -139,6 +150,23 @@ export default function SettingsPage() {
     }
   }
 
+  async function createStore(event: React.FormEvent) {
+    event.preventDefault();
+    setSavingStore(true);
+    setStoreError("");
+    try {
+      await api("/api/stores", { method: "POST", body: JSON.stringify(storeForm) });
+      toast("Store created.");
+      setStoreForm({ name: "", code: "", location: "" });
+      setShowStoreForm(false);
+      await load();
+    } catch (caught) {
+      setStoreError((caught as Error).message);
+    } finally {
+      setSavingStore(false);
+    }
+  }
+
   if (loading) return <><PageHeader eyebrow="Administration" title="Settings" /><LoadingState label="Loading your settings..." rows={3} /></>;
 
   return (
@@ -190,6 +218,67 @@ export default function SettingsPage() {
           {pwdError && <div className="mt-4"><InlineMessage message={pwdError} /></div>}
           <div className="mt-5 flex justify-end"><button disabled={savingPwd} className="btn-primary flex items-center gap-2"><KeyRound size={16} />{savingPwd ? "Updating..." : "Update password"}</button></div>
         </form>
+
+        {/* Store management (owner only) */}
+        {isOwner && (
+          <div className="xl:col-span-2">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-wine/10 text-wine"><Store size={20} /></span>
+                <div><h2 className="font-semibold">Store locations</h2><p className="text-xs text-stone-500">Manage boutique locations. Each store has its own customers, staff, and orders.</p></div>
+              </div>
+              <button onClick={() => setShowStoreForm(!showStoreForm)} className="btn-primary btn-sm flex items-center gap-2"><Plus size={15} />{showStoreForm ? "Cancel" : "Add store"}</button>
+            </div>
+
+            {showStoreForm && (
+              <form onSubmit={createStore} className="card mb-4 p-5">
+                <h3 className="mb-4 font-semibold text-sm">New store</h3>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label>Store name</label>
+                    <input value={storeForm.name} onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })} placeholder="Mumbai Flagship" required minLength={2} />
+                  </div>
+                  <div>
+                    <label>Store code</label>
+                    <input value={storeForm.code} onChange={(e) => setStoreForm({ ...storeForm, code: e.target.value.toUpperCase() })} placeholder="MUM-01" required minLength={2} maxLength={20} />
+                    <p className="mt-1 text-xs text-stone-400">Short unique identifier (e.g. AMD-HQ, MUM-01)</p>
+                  </div>
+                  <div>
+                    <label>Location / City</label>
+                    <input value={storeForm.location} onChange={(e) => setStoreForm({ ...storeForm, location: e.target.value })} placeholder="Mumbai" />
+                  </div>
+                </div>
+                {storeError && <div className="mt-3"><InlineMessage message={storeError} /></div>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={() => { setShowStoreForm(false); setStoreError(""); }} className="btn-secondary btn-sm">Cancel</button>
+                  <button disabled={savingStore} className="btn-primary btn-sm flex items-center gap-2"><Plus size={14} />{savingStore ? "Creating..." : "Create store"}</button>
+                </div>
+              </form>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {stores.length ? stores.map((s) => (
+                <div key={s.id} className="card p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{s.name}</p>
+                      <p className="mt-0.5 text-xs font-mono text-stone-400">{s.code}</p>
+                    </div>
+                    <span className="shrink-0 rounded-lg bg-stone-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-stone-500">Active</span>
+                  </div>
+                  {s.location && (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-stone-500"><MapPin size={12} />{s.location}</div>
+                  )}
+                  <div className="mt-3 flex gap-3 border-t border-stone-100 pt-3 text-xs text-stone-500">
+                    <span><span className="font-semibold text-ink">{s._count.users}</span> staff</span>
+                    <span><span className="font-semibold text-ink">{s._count.customers}</span> customers</span>
+                    <span><span className="font-semibold text-ink">{s._count.orders}</span> orders</span>
+                  </div>
+                </div>
+              )) : <div className="xl:col-span-3"><EmptyState message="No stores found." /></div>}
+            </div>
+          </div>
+        )}
 
         {/* Business settings (owner / settings.edit) */}
         {canEditBusiness && (

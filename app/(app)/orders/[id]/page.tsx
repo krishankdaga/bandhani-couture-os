@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertTriangle, CreditCard, IndianRupee, Package, Plus, Scissors, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, CreditCard, IndianRupee, Package, Pencil, Plus, Save, Scissors, Trash2, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
@@ -26,6 +26,7 @@ type Material = {
   itemOnHand: number; itemReserved: number; itemAvailable: number; itemShortage: number;
 };
 type StockOption = { id: string; sku: string; name: string; unit: string; category: string; onHand: number; available: number };
+type Stylist = { id: string; name: string; role: string };
 
 const STAGE_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"] as const;
 const METHODS = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"] as const;
@@ -102,20 +103,29 @@ export default function OrderSummaryPage() {
   const [savingMat, setSavingMat] = useState(false);
   const [matError, setMatError] = useState("");
 
+  // Edit order state
+  const [showEdit, setShowEdit] = useState(false);
+  const [stylists, setStylists] = useState<Stylist[]>([]);
+  const [editForm, setEditForm] = useState({ stylistId: "", orderValue: "", priority: "", deliveryDate: "", measurements: {} as Record<string, string>, customisations: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [orderResult, payResult, matResult, meResult] = await Promise.all([
+      const [orderResult, payResult, matResult, meResult, metaResult] = await Promise.all([
         api<{ order: Order }>(`/api/orders/${id}`),
         api<{ payments: Payment[] }>(`/api/orders/${id}/payments`).catch(() => ({ payments: [] })),
         api<{ materials: Material[]; items: StockOption[] }>(`/api/orders/${id}/materials`).catch(() => ({ materials: [], items: [] })),
         api<{ user: { permissions: string[] } }>("/api/auth/me").catch(() => ({ user: { permissions: [] } })),
+        api<{ users: Stylist[] }>("/api/meta").catch(() => ({ users: [] })),
       ]);
       setOrder(orderResult.order);
       setPayments(payResult.payments);
       setMaterials(matResult.materials);
       setStockOptions(matResult.items);
       setPermissions(meResult.user.permissions);
+      setStylists((metaResult.users || []).filter((u: Stylist) => u.role === "STYLIST"));
     } catch (caught) { setError((caught as Error).message); } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -180,6 +190,41 @@ export default function OrderSummaryPage() {
     catch (caught) { toast((caught as Error).message, "error"); }
   }
 
+  function openEdit() {
+    if (!order) return;
+    setEditForm({
+      stylistId: "",
+      orderValue: String(order.orderValue),
+      priority: order.priority,
+      deliveryDate: order.deliveryDate.slice(0, 10),
+      measurements: { ...order.measurements },
+      customisations: order.customisations?.join(", ") ?? "",
+    });
+    setEditError("");
+    setShowEdit(true);
+  }
+
+  async function saveEdit(event: React.FormEvent) {
+    event.preventDefault();
+    setSavingEdit(true); setEditError("");
+    try {
+      await api(`/api/orders/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...(editForm.stylistId && { stylistId: editForm.stylistId }),
+          orderValue: Number(editForm.orderValue),
+          priority: editForm.priority,
+          deliveryDate: editForm.deliveryDate,
+          measurements: editForm.measurements,
+          customisations: editForm.customisations.split(",").map((v) => v.trim()).filter(Boolean),
+        }),
+      });
+      toast("Order updated.");
+      setShowEdit(false);
+      await load();
+    } catch (caught) { setEditError((caught as Error).message); } finally { setSavingEdit(false); }
+  }
+
   if (loading) return <LoadingState label="Loading order..." rows={4} />;
   if (error || !order) return <ErrorState message={error || "Order not found."} retry={load} />;
 
@@ -196,8 +241,74 @@ export default function OrderSummaryPage() {
 
   return (
     <div className="print-summary">
-      <PageHeader title={order.orderNumber} description={`${order.customer.name} · ${order.store.name}`} action={<button onClick={() => window.print()} className="btn-secondary no-print">Print order summary</button>} />
+      <PageHeader
+        title={order.orderNumber}
+        description={`${order.customer.name} · ${order.store.name}`}
+        action={
+          <div className="flex gap-2 no-print">
+            {canEditOrder && (
+              <button onClick={openEdit} className="btn-secondary flex items-center gap-2"><Pencil size={15} />Edit order</button>
+            )}
+            <button onClick={() => window.print()} className="btn-secondary">Print</button>
+          </div>
+        }
+      />
       <p className="mb-5 text-xs text-stone-400">Last updated {new Date(order.updatedAt).toLocaleString("en-IN")}</p>
+
+      {/* Edit order panel */}
+      {showEdit && canEditOrder && (
+        <form onSubmit={saveEdit} className="card mb-5 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-wine/10 text-wine"><Pencil size={17} /></span>
+              <div><h2 className="font-semibold">Edit order</h2><p className="text-xs text-stone-500">Correct mistakes made during order entry</p></div>
+            </div>
+            <button type="button" onClick={() => setShowEdit(false)} className="text-sm font-medium text-stone-400 hover:text-ink">Cancel</button>
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <label>Order value (₹)</label>
+              <input type="number" min="1" step="1" required value={editForm.orderValue} onChange={(e) => setEditForm({ ...editForm, orderValue: e.target.value })} />
+            </div>
+            <div>
+              <label>Priority</label>
+              <select value={editForm.priority} onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}>
+                {["NORMAL", "HIGH", "URGENT"].map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label>Delivery date</label>
+              <input type="date" required value={editForm.deliveryDate} onChange={(e) => setEditForm({ ...editForm, deliveryDate: e.target.value })} />
+            </div>
+            <div>
+              <label>Reassign stylist</label>
+              <select value={editForm.stylistId} onChange={(e) => setEditForm({ ...editForm, stylistId: e.target.value })}>
+                <option value="">Keep current ({order.stylist.name})</option>
+                {stylists.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            {(["bust", "waist", "hip", "length"] as const).map((field) => (
+              <div key={field}>
+                <label className="capitalize">{field}</label>
+                <input
+                  value={(editForm.measurements as Record<string, string>)[field] ?? ""}
+                  onChange={(e) => setEditForm({ ...editForm, measurements: { ...editForm.measurements, [field]: e.target.value } })}
+                  placeholder="inches"
+                />
+              </div>
+            ))}
+            <div className="md:col-span-2 xl:col-span-4">
+              <label>Customisations (comma separated)</label>
+              <input value={editForm.customisations} onChange={(e) => setEditForm({ ...editForm, customisations: e.target.value })} placeholder="Full sleeves, Personalised dupatta border" />
+            </div>
+          </div>
+          {editError && <div className="mx-5 mb-4"><InlineMessage message={editError} /></div>}
+          <div className="flex justify-end gap-2 border-t border-stone-100 px-5 py-4">
+            <button type="button" onClick={() => setShowEdit(false)} className="btn-secondary">Cancel</button>
+            <button disabled={savingEdit} className="btn-primary flex items-center gap-2"><Save size={15} />{savingEdit ? "Saving..." : "Save changes"}</button>
+          </div>
+        </form>
+      )}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="card p-4"><p className="text-xs text-stone-400">Order value</p><p className="mt-1 text-lg font-semibold">{money(order.orderValue)}</p></div>

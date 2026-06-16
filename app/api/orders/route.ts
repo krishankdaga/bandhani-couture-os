@@ -53,8 +53,10 @@ export async function POST(request: NextRequest) {
       if (!customer || !store) throw new Error("A selected related record is invalid");
       if (!stylist || stylist.role !== "STYLIST" || !stylist.active) throw new Error("Select an active stylist");
       if (customer.storeId !== data.storeId) throw new Error("Customer and order must belong to the same store");
-      const count = await tx.order.count();
-      const orderNumber = `BD-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
+      // Short, professional token number the owner/customer can quote easily: BD-1001, BD-1002, …
+      // Counts only the BD- series so it starts cleanly at 1001 and is never zero-padded.
+      const count = await tx.order.count({ where: { orderNumber: { startsWith: "BD-" } } });
+      const orderNumber = `BD-${1001 + count}`;
       const created = await tx.order.create({
         data: {
           orderNumber, customerId: data.customerId, stylistId: data.stylistId, storeId: data.storeId,

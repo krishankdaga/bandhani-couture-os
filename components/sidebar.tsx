@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
 import { groupedNavigation } from "@/lib/navigation";
 
 type SidebarProps = {
@@ -15,6 +15,16 @@ type SidebarProps = {
 export function Sidebar({ permissions, companyStatus, mobileOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const sections = groupedNavigation(permissions, companyStatus === "OWNER");
+  const allHrefs = sections.flatMap((section) => section.items.map((item) => item.href));
+
+  // Active = the single longest href that matches, so /production/command-center
+  // highlights only Command Center, not Production.
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    const matches = (h: string) => pathname === h || pathname.startsWith(`${h}/`);
+    if (!matches(href)) return false;
+    return !allHrefs.some((other) => other !== href && other.length > href.length && matches(other));
+  };
 
   return (
     <>
@@ -52,7 +62,7 @@ export function Sidebar({ permissions, companyStatus, mobileOpen, onClose }: Sid
               <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[.16em] text-stone-400">{section.group}</p>
               <div className="space-y-0.5">
                 {section.items.map((item) => {
-                  const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+                  const active = isActive(item.href);
                   const Icon = item.icon;
                   return (
                     <Link
@@ -78,19 +88,6 @@ export function Sidebar({ permissions, companyStatus, mobileOpen, onClose }: Sid
             </div>
           ))}
         </nav>
-
-        {/* Footer */}
-        <div className="border-t border-stone-100 p-4">
-          <div className="rounded-xl border border-stone-200/70 bg-sand/60 p-3.5">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-gold" />
-              <p className="text-xs font-semibold text-stone-700">Couture OS</p>
-            </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-stone-500">
-              Need access or workflow help? Contact your Bandhani / Siddhartha Daga administrator.
-            </p>
-          </div>
-        </div>
       </aside>
     </>
   );

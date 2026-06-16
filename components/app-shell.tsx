@@ -5,8 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, FileClock, LogOut, Menu, Settings, UserRound } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
-import { labelForPath } from "@/lib/navigation";
-import { permissionForPath } from "@/lib/navigation";
+import { labelForPath, navigationItems, permissionForPath } from "@/lib/navigation";
 import { AccessDenied } from "@/components/access-denied";
 import { GlobalSearch } from "@/components/global-search";
 import { NotificationCenter } from "@/components/notification-center";
@@ -27,9 +26,12 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const [profileOpen, setProfileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const pageLabel = labelForPath(pathname);
-  const detailPage = pathname.split("/").filter(Boolean).length > 1;
+  // A "detail" page is a nested route that is NOT itself a known nav destination
+  // (e.g. /orders/abc123), so /production/command-center stays a top-level page.
+  const isKnownPage = navigationItems.some((item) => item.href === pathname);
+  const detailPage = !isKnownPage && pathname.split("/").filter(Boolean).length > 1;
   const requiredPermission = permissionForPath(pathname);
-  const ownerOnlyPage = pathname.startsWith("/employees") || pathname.startsWith("/roles") || pathname.startsWith("/assistant");
+  const ownerOnlyPage = pathname.startsWith("/employees") || pathname.startsWith("/roles") || pathname.startsWith("/assistant") || pathname.startsWith("/data-health");
   const canViewPage = (!ownerOnlyPage || user.companyStatus === "OWNER") && (!requiredPermission || user.companyStatus === "OWNER" || user.permissions.includes(requiredPermission));
   const sidebarPermissions = user.companyStatus === "OWNER"
     ? user.permissions
