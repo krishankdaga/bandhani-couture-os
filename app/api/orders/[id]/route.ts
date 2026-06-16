@@ -1,7 +1,7 @@
 import { Priority } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { isApiError, requireUser, validationError } from "@/lib/api";
+import { isApiError, requireOwner, requireUser, validationError } from "@/lib/api";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { storeScope } from "@/lib/scope";
@@ -61,6 +61,29 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return updated;
     });
     return NextResponse.json({ order });
+  } catch (error) {
+    return validationError(error);
+  }
+}
+
+/** Owner-only hard delete — deletes the order and all child records (cascade). */
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const user = await requireOwner(request);
+  if (isApiError(user)) return user;
+  const { id } = await context.params;
+  try {
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    await prisma.$transaction(async (tx) => {
+      await writeAudit(tx, { userId: user.id, action: "DELETE", entity: "Order", entityId: id, oldValue: order });
+      // Delete child records that have no cascade
+      await tx.orderPayment.deleteMany({ where: { orderId: id } });
+      await tx.orderMaterial.deleteMany({ where: { orderId: id } });
+      await tx.delayPardon.deleteMany({ where: { orderId: id } });
+      await tx.productionStage.deleteMany({ where: { orderId: id } });
+      await tx.order.delete({ where: { id } });
+    });
+    return NextResponse.json({ ok: true });
   } catch (error) {
     return validationError(error);
   }

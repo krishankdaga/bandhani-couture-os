@@ -15,11 +15,12 @@ export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
     const now = new Date();
+    const allTime = url.searchParams.get("all") === "1";
     const defaultFrom = new Date(now); defaultFrom.setDate(defaultFrom.getDate() - 90);
     const fromParam = url.searchParams.get("from");
     const toParam = url.searchParams.get("to");
-    const from = fromParam ? new Date(fromParam) : defaultFrom;
-    const to = toParam ? new Date(toParam) : now;
+    const from = allTime ? new Date("2000-01-01") : (fromParam ? new Date(fromParam) : defaultFrom);
+    const to = allTime ? now : (toParam ? new Date(toParam) : now);
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) throw new Error("Invalid date");
     to.setHours(23, 59, 59, 999);
     const range = { gte: from, lte: to };

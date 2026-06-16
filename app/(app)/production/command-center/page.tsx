@@ -97,7 +97,7 @@ export default function CommandCenterPage() {
                   <div className="flex items-center gap-2 text-xs">
                     {b.red > 0 && <span className="badge bg-red-100 text-red-700">{b.red} delayed</span>}
                     {b.yellow > 0 && <span className="badge bg-amber-100 text-amber-700">{b.yellow} at risk</span>}
-                    <span className="text-stone-400">{b.count} open</span>
+                    <span className="text-stone-400">{b.count} pending stage{b.count !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
               ))}
@@ -114,7 +114,7 @@ export default function CommandCenterPage() {
                   <p className="text-sm font-medium">{c.name}</p>
                   <div className="flex items-center gap-3">
                     {c.red > 0 && <span className="badge bg-red-100 text-red-700">{c.red} delayed</span>}
-                    <span className="text-sm font-semibold">{c.open} open</span>
+                    <span className="text-sm font-semibold">{c.open} stage{c.open !== 1 ? "s" : ""} assigned</span>
                   </div>
                 </div>
               ))}

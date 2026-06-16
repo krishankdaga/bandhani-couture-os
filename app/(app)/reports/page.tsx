@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download } from "lucide-react";
+import { CalendarDays, Download } from "lucide-react";
 import { LoadingState } from "@/components/async-state";
 import { PageHeader } from "@/components/page-header";
 import { api, money } from "@/lib/client";
@@ -25,18 +25,28 @@ export default function ReportsPage() {
   const ninetyAgo = new Date(today); ninetyAgo.setDate(ninetyAgo.getDate() - 90);
   const [from, setFrom] = useState(iso(ninetyAgo));
   const [to, setTo] = useState(iso(today));
+  const [allTime, setAllTime] = useState(false);
+
+  function setPreset(days: number | null) {
+    if (days === null) { setAllTime(true); return; }
+    setAllTime(false);
+    const t = new Date();
+    const f = new Date(t); f.setDate(f.getDate() - days);
+    setFrom(iso(f)); setTo(iso(t));
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const analyticsUrl = allTime ? "/api/reports/analytics?all=1" : `/api/reports/analytics?from=${from}&to=${to}`;
       const [summaryResult, analyticsResult] = await Promise.all([
         api<{ summary: Summary }>("/api/reports"),
-        api<Analytics>(`/api/reports/analytics?from=${from}&to=${to}`),
+        api<Analytics>(analyticsUrl),
       ]);
       setSummary(summaryResult.summary);
       setAnalytics(analyticsResult);
     } finally { setLoading(false); }
-  }, [from, to]);
+  }, [from, to, allTime]);
   useEffect(() => { load(); }, [load]);
 
   const cards = summary ? [
@@ -49,10 +59,22 @@ export default function ReportsPage() {
     <>
       <PageHeader eyebrow="Business intelligence" title="Reports & Analytics" description="Sales trends, lead conversion, and team performance across CRM, orders, production, stock and finance." action={<a href="/api/export/reports" className="btn-secondary flex items-center gap-2"><Download size={16} />Export CSV</a>} />
 
-      <div className="card mb-5 flex flex-wrap items-end gap-3 p-4">
-        <div><label>From</label><input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div><label>To</label><input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></div>
-        <p className="ml-auto text-xs text-stone-500">Date range applies to the analytics below. The snapshot tiles are all-time.</p>
+      <div className="card mb-5 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className={allTime ? "opacity-40 pointer-events-none" : ""}>
+            <label>From</label><input type="date" value={from} max={to} onChange={(e) => { setAllTime(false); setFrom(e.target.value); }} />
+          </div>
+          <div className={allTime ? "opacity-40 pointer-events-none" : ""}>
+            <label>To</label><input type="date" value={to} min={from} onChange={(e) => { setAllTime(false); setTo(e.target.value); }} />
+          </div>
+          <div className="flex flex-wrap gap-2 pb-0.5">
+            {[["30d", 30], ["90d", 90], ["1y", 365]].map(([label, days]) => (
+              <button key={label} type="button" onClick={() => setPreset(days as number)} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${!allTime && (days === 30 ? iso(new Date(new Date().setDate(new Date().getDate() - 30))) === from : days === 365 ? iso(new Date(new Date().setDate(new Date().getDate() - 365))) === from : iso(new Date(new Date().setDate(new Date().getDate() - 90))) === from) ? "border-wine bg-wine text-white" : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"}`}>{label}</button>
+            ))}
+            <button type="button" onClick={() => setPreset(null)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${allTime ? "border-wine bg-wine text-white" : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"}`}><CalendarDays size={12} />All time</button>
+          </div>
+        </div>
+        <p className="mt-2.5 text-xs text-stone-400">Date range applies to the analytics sections below. The snapshot tiles at the top are always all-time.</p>
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

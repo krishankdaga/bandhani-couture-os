@@ -13,13 +13,15 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const [stages, orders, stock, purchases, followUps, pardons] = await Promise.all([
+  const [stages, orders, stock, purchases, followUps, pardons, deleteRequests] = await Promise.all([
     hasPermission(user, "production.view") ? prisma.productionStage.findMany({ where: { order: storeScope(user), status: { not: "COMPLETED" }, delayState: "RED" }, select: { id: true, type: true, dueDate: true, order: { select: { orderNumber: true } } }, take: 10, orderBy: { dueDate: "asc" } }) : Promise.resolve([]),
     hasPermission(user, "orders.view") ? prisma.order.findMany({ where: { ...storeScope(user), delayState: { in: ["RED", "YELLOW"] }, status: { notIn: ["DELIVERED", "CANCELLED"] } }, select: { id: true, orderNumber: true, delayState: true, deliveryDate: true, customer: { select: { name: true } } }, take: 10, orderBy: { deliveryDate: "asc" } }) : Promise.resolve([]),
     hasPermission(user, "inventory.view") ? prisma.inventoryItem.findMany({ where: { ...optionalStoreScope(user) }, select: { id: true, sku: true, name: true, quantity: true, reorderAt: true, unit: true, allocations: { select: { requiredQty: true, consumedQty: true, order: { select: { status: true } } } } }, orderBy: { updatedAt: "desc" } }) : Promise.resolve([]),
     hasPermission(user, "purchases.view") ? prisma.purchase.findMany({ where: { ...optionalStoreScope(user), status: { in: ["REQUESTED", "ORDERED"] } }, select: { id: true, purchaseNo: true, vendorName: true, status: true, expectedDate: true }, take: 10, orderBy: { expectedDate: "asc" } }) : Promise.resolve([]),
     hasPermission(user, "leads.view") ? prisma.lead.findMany({ where: { ...storeScope(user), followUpDate: { lte: tomorrow }, status: { in: ["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED"] } }, select: { id: true, name: true, phone: true, followUpDate: true }, take: 10, orderBy: { followUpDate: "asc" } }) : Promise.resolve([]),
     user.companyStatus === "OWNER" ? prisma.delayPardon.findMany({ where: { status: "REQUESTED" }, select: { id: true, reason: true, createdAt: true }, take: 10, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+    // Show deletion requests to the owner so they can approve or reject
+    user.companyStatus === "OWNER" ? prisma.auditLog.findMany({ where: { action: "DELETE_REQUESTED", entity: "Order" }, select: { id: true, entityId: true, newValue: true, createdAt: true }, take: 10, orderBy: { createdAt: "desc" } }) : Promise.resolve([]),
   ]);
 
   const notifications: Notification[] = [
@@ -35,6 +37,12 @@ export async function GET(request: NextRequest) {
     ...purchases.map((item) => ({ id: `purchase-${item.id}`, title: `${item.purchaseNo} from ${item.vendorName} is pending receipt`, category: "Purchases", severity: item.expectedDate && item.expectedDate < now ? "critical" as const : "warning" as const, date: item.expectedDate, href: "/purchases" })),
     ...followUps.map((item) => ({ id: `followup-${item.id}`, title: `Follow up with ${item.name} (${item.phone})`, category: "Leads", severity: item.followUpDate && item.followUpDate < now ? "warning" as const : "info" as const, date: item.followUpDate, href: "/leads" })),
     ...pardons.map((item) => ({ id: `pardon-${item.id}`, title: `Delay pardon awaiting review: ${item.reason}`, category: "Pardons", severity: "warning" as const, date: item.createdAt, href: "/production" })),
+    ...deleteRequests.map((item) => {
+      const val = item.newValue as Record<string, string> | null;
+      const label = val?.orderNumber ?? item.entityId;
+      const requestedBy = val?.requestedBy ? ` — requested by ${val.requestedBy}` : "";
+      return { id: `del-req-${item.id}`, title: `Deletion requested for order ${label}${requestedBy}`, category: "Orders", severity: "warning" as const, date: item.createdAt, href: `/orders/${item.entityId}` };
+    }),
   ].sort((a, b) => (a.severity === "critical" ? -1 : a.severity === "warning" ? 0 : 1) - (b.severity === "critical" ? -1 : b.severity === "warning" ? 0 : 1));
 
   const visible = notifications.slice(0, 40);
