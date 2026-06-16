@@ -1,19 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assistantFallback, assistantTopics } from "@/lib/assistant";
+import { assistantFallback, selectModules } from "@/lib/assistant";
 import { getGroqConfig, safeGroqConfig } from "@/lib/groq-config";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-test("assistant selects relevant database topics", () => {
-  assert.deepEqual(assistantTopics("Which purchases are pending receipt?"), ["purchases"]);
-  assert.deepEqual(assistantTopics("Show low stock fabrics"), ["inventory"]);
-  assert.equal(assistantTopics("Summarise business status today").length, 5);
+test("assistant maps questions to the relevant modules", () => {
+  assert.deepEqual(selectModules("Which purchases are pending receipt?"), ["purchases"]);
+  assert.deepEqual(selectModules("Show low stock fabrics"), ["inventory"]);
+  assert.ok(selectModules("Compare store performance").includes("stores"));
+  assert.ok(selectModules("Show production bottlenecks").includes("production"));
+  assert.ok(selectModules("What incentives are unpaid?").includes("incentives"));
 });
 
-test("assistant fallback summarizes available live context", () => {
-  const answer = assistantFallback({ generatedAt: "2026-06-15T12:00:00.000Z", orders: [{ id: 1 }], inventory: [] });
-  assert.match(answer, /1 active orders/);
-  assert.match(answer, /0 low-stock items/);
+test("broad and unmatched questions pull the operational overview set", () => {
+  const overview = selectModules("Summarise business status today");
+  for (const key of ["orders", "production", "inventory", "purchases", "leads", "notifications"]) {
+    assert.ok(overview.includes(key as never), `expected overview to include ${key}`);
+  }
+  // An unmatched question still returns the overview rather than nothing.
+  assert.ok(selectModules("xyzzy").length > 0);
+});
+
+test("assistant fallback summarizes the structured module context", () => {
+  const answer = assistantFallback({
+    generatedAt: "2026-06-15T12:00:00.000Z",
+    modules: { orders: { delayedCount: 2, atRiskCount: 1, dueThisWeek: [] }, inventory: { lowStockCount: 0 } },
+  });
+  assert.match(answer, /2 delayed/);
+  assert.match(answer, /0 items low/);
   assert.match(answer, /temporarily unavailable/);
 });
 

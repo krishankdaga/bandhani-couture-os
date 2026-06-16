@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isApiError, requireUser, validationError } from "@/lib/api";
 import { stockStanding } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
-import { optionalStoreScope, storeScope } from "@/lib/scope";
+import { resolveOptionalStoreScope, resolveStoreScope } from "@/lib/scope";
 
 /**
  * Advanced analytics: sales trend, lead-conversion performance, and per-employee
@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
     to.setHours(23, 59, 59, 999);
     const range = { gte: from, lte: to };
 
-    const scope = storeScope(user);
+    const requestedStoreId = url.searchParams.get("storeId");
+    const scope = resolveStoreScope(user, requestedStoreId);
 
     const [orders, leads, stages, users, inventory] = await Promise.all([
       prisma.order.findMany({
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.user.findMany({ where: { active: true }, select: { id: true, name: true, role: true } }),
       prisma.inventoryItem.findMany({
-        where: optionalStoreScope(user),
+        where: resolveOptionalStoreScope(user, requestedStoreId),
         select: { quantity: true, costPrice: true, reorderAt: true, allocations: { select: { requiredQty: true, consumedQty: true, order: { select: { status: true } } } } },
       }),
     ]);
