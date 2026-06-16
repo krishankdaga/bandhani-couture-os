@@ -1,0 +1,28 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
+import { api, money, shortDate } from "@/lib/client";
+import { StatusBadge } from "@/components/status-badge";
+import { safeJsonArray } from "@/lib/json";
+import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
+
+type Customer = { id: string; name: string; phone: string; email: string | null; address: string | null; updatedAt: string; preferences: string[] | null; likedPieces: string[] | null; piecesTried: string[] | null; store: { name: string }; interactions: Array<{ id: string; type: string; summary: string; occurredAt: string; user: { name: string } }>; communicationHistory: Array<{ id: string; channel: string; message: string; sentAt: string }>; orders: Array<{ id: string; orderNumber: string; orderValue: string; deliveryDate: string; status: string }> };
+export default function CustomerDetailPage() {
+  const { id } = useParams<{ id: string }>(); const [customer, setCustomer] = useState<Customer | null>(null); const [error, setError] = useState(""); const [formError, setFormError] = useState(""); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
+  const load = useCallback(async () => { setLoading(true); setError(""); try { const result = await api<{ customer: Customer }>(`/api/customers/${id}`); setCustomer(result.customer); } catch (e) { setError((e as Error).message); } finally { setLoading(false); } }, [id]);
+  useEffect(() => { load(); }, [load]);
+  async function addInteraction(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setFormError(""); setSaving(true); const formElement = event.currentTarget; const form = new FormData(formElement); try { await api(`/api/customers/${id}`, { method: "POST", body: JSON.stringify(Object.fromEntries(form)) }); formElement.reset(); await load(); } catch (e) { setFormError((e as Error).message); } finally { setSaving(false); } }
+  if (loading) return <><PageHeader title="Customer profile" /><LoadingState label="Loading customer..." /></>;
+  if (error) return <><PageHeader title="Customer profile" /><ErrorState message={error} retry={load} /></>;
+  if (!customer) return <><PageHeader title="Customer profile" /><ErrorState message="Customer not found." /></>;
+  return <div className="print-summary"><PageHeader title={customer.name} description={`${customer.phone} · ${customer.store.name}`} action={<button onClick={() => window.print()} className="btn-secondary no-print">Print customer summary</button>} />
+    <p className="mb-5 text-xs text-stone-400">Last updated {new Date(customer.updatedAt).toLocaleString("en-IN")}</p>
+    <div className="grid gap-6 xl:grid-cols-3"><section className="card p-5"><h3 className="font-semibold">Couture profile</h3><dl className="mt-4 space-y-3 text-sm"><div><dt className="text-stone-400">Preferences</dt><dd>{safeJsonArray(customer.preferences).join(", ") || "Not recorded"}</dd></div><div><dt className="text-stone-400">Liked pieces</dt><dd>{safeJsonArray(customer.likedPieces).join(", ") || "Not recorded"}</dd></div><div><dt className="text-stone-400">Pieces tried</dt><dd>{safeJsonArray(customer.piecesTried).join(", ") || "Not recorded"}</dd></div></dl></section>
+      <section className="card p-5 xl:col-span-2"><h3 className="font-semibold">Contact details</h3><p className="mt-3 text-sm">{customer.email || "Email not recorded"}</p><p className="mt-1 text-sm text-stone-500">{customer.address || "Address not recorded"}</p><div className="no-print"><h3 className="mt-6 font-semibold">Add interaction</h3><form onSubmit={addInteraction} className="mt-4 grid gap-3 md:grid-cols-4"><select name="type" aria-label="Interaction type">{["STORE_VISIT", "CALL", "WHATSAPP", "EMAIL", "NOTE"].map(v => <option key={v}>{v.replaceAll("_", " ")}</option>)}</select><input className="md:col-span-2" name="summary" minLength={2} placeholder="Interaction summary" required /><button disabled={saving} className="btn-primary">{saving ? "Adding..." : "Add note"}</button>{formError && <div className="md:col-span-4"><InlineMessage message={formError} /></div>}</form></div><div className="mt-5 space-y-3">{customer.interactions.map(i => <div className="border-l-2 border-gold pl-3" key={i.id}><p className="text-sm">{i.summary}</p><p className="text-xs text-stone-400">{i.type.replaceAll("_", " ")} · {i.user.name} · {shortDate(i.occurredAt)}</p></div>)}{!customer.interactions.length && <p className="text-sm text-stone-400">No interactions recorded yet.</p>}</div></section>
+    </div>
+    <section className="card mt-6 p-5"><h3 className="font-semibold">Communication history</h3><div className="mt-4 space-y-3">{customer.communicationHistory.map(item => <div key={item.id} className="rounded-lg border border-stone-100 p-3"><p className="text-sm">{item.message}</p><p className="text-xs text-stone-400">{item.channel} · {shortDate(item.sentAt)}</p></div>)}{!customer.communicationHistory.length && <p className="text-sm text-stone-400">No communication recorded yet.</p>}</div></section>
+    <section className="card mt-6 p-5"><h3 className="font-semibold">Order history</h3><div className="mt-4 space-y-3">{customer.orders.map(o => <div key={o.id} className="flex items-center justify-between rounded-lg border border-stone-100 p-3"><div><strong className="text-sm">{o.orderNumber}</strong><p className="text-xs text-stone-500">{money(o.orderValue)} · due {shortDate(o.deliveryDate)}</p></div><StatusBadge value={o.status} /></div>)}{!customer.orders.length && <p className="text-sm text-stone-400">No orders yet.</p>}</div></section>
+  </div>;
+}

@@ -1,0 +1,4 @@
+import { PageHeader } from "@/components/page-header";
+export function PlaceholderPage({ title, description }: { title: string; description: string }) {
+  return <><PageHeader eyebrow="Phase 2 module" title={title} description={description} /><div className="card relative grid min-h-80 overflow-hidden place-items-center p-8 text-center"><div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-wine via-gold to-wine" /><div><span className="inline-flex rounded-full bg-wine/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[.18em] text-wine">Coming in Phase 2</span><h2 className="mt-5 text-2xl font-semibold">This workspace is being prepared</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-stone-500">The navigation and module boundary are ready. Business workflows and data entry will be introduced in Phase 2 without affecting the current CRM, order, and production modules.</p></div></div></>;
+}

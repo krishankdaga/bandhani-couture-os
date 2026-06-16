@@ -1,0 +1,246 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ----------------------------------------------------------------------------
+   Couture OS — unified design system
+   All legacy class names (.card, .btn-primary, .btn-secondary, .table-wrap)
+   are preserved so existing pages keep working while looking more refined.
+---------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    /* Clean, near-white canvas to mirror the official store's minimal white look. */
+    @apply bg-sand text-ink antialiased;
+  }
+
+  /* Display serif (Libre Baskerville) — brand wordmark and hero headlines. */
+  .display-title {
+    font-family: var(--font-display);
+    @apply tracking-[-0.005em];
+  }
+
+  ::selection {
+    @apply bg-accent/30 text-ink;
+  }
+
+  /* Form controls */
+  input,
+  select,
+  textarea {
+    @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-ink shadow-sm outline-none transition
+      placeholder:text-stone-400 focus:border-accent-deep focus:ring-2 focus:ring-accent/30
+      disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-400;
+  }
+
+  textarea {
+    @apply leading-relaxed;
+  }
+
+  label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-stone-500;
+  }
+
+  button {
+    @apply transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    @apply outline-none ring-2 ring-accent-deep ring-offset-2;
+  }
+
+  /* Tables */
+  table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+
+  th {
+    @apply border-b border-stone-200 bg-stone-50/80 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-stone-500;
+  }
+
+  td {
+    @apply border-b border-stone-100 px-4 py-3 align-middle;
+  }
+
+  tbody tr {
+    @apply transition-colors;
+  }
+
+  tbody tr:hover {
+    @apply bg-stone-50/70;
+  }
+
+  tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Subtle, modern scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(214 211 209) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full border-2 border-solid border-transparent bg-stone-300 bg-clip-content;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    @apply bg-stone-400;
+  }
+}
+
+@layer components {
+  /* Surfaces */
+  .card {
+    @apply rounded-xl border border-stone-200 bg-white shadow-card transition duration-200;
+  }
+
+  .card-hover {
+    @apply hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-card-lg;
+  }
+
+  .panel {
+    @apply rounded-xl border border-stone-200 bg-white;
+  }
+
+  /* Buttons — shared base */
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold leading-none
+      transition active:translate-y-px;
+  }
+
+  .btn-primary {
+    @apply bg-wine text-white shadow-sm hover:bg-wine/90 hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply border border-stone-300 bg-white text-ink shadow-sm hover:bg-stone-50 hover:border-stone-400;
+  }
+
+  .btn-ghost {
+    @apply text-stone-600 hover:bg-stone-100 hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply border border-red-200 bg-white text-red-700 hover:bg-red-50;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* Badges & chips */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-none;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600;
+  }
+
+  /* Tables */
+  .table-wrap {
+    @apply overflow-x-auto rounded-xl border border-stone-200 bg-white shadow-card;
+  }
+
+  /* Skeleton loaders */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-stone-200/70;
+  }
+
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0,
+      rgba(255, 255, 255, 0.55) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.4s infinite;
+  }
+
+  /* Section heading used inside cards */
+  .section-title {
+    @apply text-sm font-semibold tracking-tight text-ink;
+  }
+
+  /* Refined inline text link — turquoise accent, matching the store's hovers */
+  .link {
+    @apply font-medium text-accent-deep underline-offset-2 transition hover:text-accent hover:underline;
+  }
+
+  /* Page content entrance — applied once per route in the app shell. */
+  .page-enter {
+    animation: page-enter 0.34s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Defined explicitly: the skeleton shimmer references this from raw CSS, so
+   Tailwind would not otherwise emit it (it only emits keyframes for used
+   animate-* utilities). */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media print {
+  aside,
+  header,
+  .no-print,
+  .fixed {
+    display: none !important;
+  }
+  body,
+  main {
+    background: white !important;
+    padding: 0 !important;
+  }
+  .print-summary {
+    max-width: none !important;
+  }
+  .card {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+}

@@ -1,0 +1,4 @@
+"use client";
+import { useEffect, useState } from "react";
+type Toast = { id:number; message:string; tone:"success"|"error" };
+export function ToastViewport(){const[items,setItems]=useState<Toast[]>([]);useEffect(()=>{const listener=(event:Event)=>{const detail=(event as CustomEvent<Omit<Toast,"id">>).detail,id=Date.now();setItems((current)=>[...current,{...detail,id}]);setTimeout(()=>setItems((current)=>current.filter((item)=>item.id!==id)),3500);};window.addEventListener("cbos:toast",listener);return()=>window.removeEventListener("cbos:toast",listener);},[]);return <div className="fixed bottom-5 left-1/2 z-[100] flex -translate-x-1/2 flex-col gap-2">{items.map((item)=><div key={item.id} className={`min-w-64 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-xl animate-scale-in ${item.tone==="success"?"bg-emerald-700":"bg-red-700"}`}>{item.message}</div>)}</div>;}

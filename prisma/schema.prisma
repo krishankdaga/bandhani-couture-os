@@ -1,0 +1,526 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  PARTNER
+  STORE_MANAGER
+  STYLIST
+  PRODUCTION_MANAGER
+  QC_TEAM
+  INVENTORY_TEAM
+  PURCHASE_TEAM
+  ACCOUNTS_TEAM
+}
+
+enum CompanyStatus {
+  OWNER
+  MANAGER
+  EMPLOYEE
+}
+
+enum LeadSource {
+  WALK_IN
+  SOCIAL_MEDIA
+  CALL
+  WHATSAPP
+  REFERRAL
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  FOLLOW_UP
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum Priority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ProductionStageType {
+  DYEING_PATTERN_CUTTING
+  EMBROIDERY
+  STITCHING
+  QC
+  STYLIST_QC
+  DELIVERY
+}
+
+enum StageStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+}
+
+enum DelayState {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum InteractionType {
+  STORE_VISIT
+  CALL
+  WHATSAPP
+  EMAIL
+  NOTE
+}
+
+enum PardonStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
+model Store {
+  id        String     @id @default(cuid())
+  name      String
+  code      String     @unique
+  location  String?
+  users     User[]
+  leads     Lead[]
+  customers Customer[]
+  orders    Order[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model User {
+  id                  String                   @id @default(cuid())
+  name                String
+  email               String                   @unique
+  passwordHash        String
+  image               String?
+  role                Role
+  companyStatus       CompanyStatus            @default(EMPLOYEE)
+  companyRoleId       String?
+  companyRole         CompanyRole?             @relation(fields: [companyRoleId], references: [id], onDelete: SetNull)
+  permissionOverrides UserPermissionOverride[]
+  active              Boolean                  @default(true)
+  storeId             String?
+  store               Store?                   @relation(fields: [storeId], references: [id])
+  assignedLeads       Lead[]                   @relation("LeadStylist")
+  styledOrders        Order[]                  @relation("OrderStylist")
+  productionStages    ProductionStage[]        @relation("StageOwner")
+  interactions        Interaction[]
+  auditLogs           AuditLog[]
+  requestedPardons    DelayPardon[]            @relation("PardonRequester")
+  reviewedPardons     DelayPardon[]            @relation("PardonReviewer")
+  recordedPayments    OrderPayment[]           @relation("PaymentRecorder")
+  notificationReads   UserNotificationRead[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([companyStatus])
+  @@index([companyRoleId])
+}
+
+model UserNotificationRead {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationKey String
+  readAt          DateTime @default(now())
+
+  @@unique([userId, notificationKey])
+  @@index([userId, readAt])
+}
+
+model CompanyRole {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  isSystem    Boolean          @default(false)
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  id         String      @id @default(cuid())
+  roleId     String
+  role       CompanyRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission String
+  createdAt  DateTime    @default(now())
+
+  @@unique([roleId, permission])
+  @@index([permission])
+}
+
+model UserPermissionOverride {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission String
+  granted    Boolean
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, permission])
+  @@index([permission])
+}
+
+model Lead {
+  id           String     @id @default(cuid())
+  name         String
+  phone        String
+  source       LeadSource
+  storeId      String
+  store        Store      @relation(fields: [storeId], references: [id])
+  stylistId    String?
+  stylist      User?      @relation("LeadStylist", fields: [stylistId], references: [id])
+  preferences  Json?
+  budget       Decimal?   @db.Decimal(12, 2)
+  eventDate    DateTime?
+  followUpDate DateTime?
+  status       LeadStatus @default(NEW)
+  notes        String?
+  customer     Customer?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([phone])
+  @@index([name])
+  @@index([status, followUpDate])
+  @@index([createdAt])
+}
+
+model Customer {
+  id                   String          @id @default(cuid())
+  name                 String
+  phone                String          @unique
+  email                String?
+  address              String?
+  storeId              String
+  store                Store           @relation(fields: [storeId], references: [id])
+  leadId               String?         @unique
+  lead                 Lead?           @relation(fields: [leadId], references: [id])
+  preferences          Json?
+  likedPieces          Json?
+  piecesTried          Json?
+  interactions         Interaction[]
+  orders               Order[]
+  communicationHistory Communication[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([name])
+  @@index([email])
+  @@index([storeId])
+}
+
+model Interaction {
+  id         String          @id @default(cuid())
+  customerId String
+  customer   Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User            @relation(fields: [userId], references: [id])
+  type       InteractionType
+  summary    String
+  occurredAt DateTime        @default(now())
+  createdAt  DateTime        @default(now())
+}
+
+model Communication {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  channel    String
+  direction  String
+  message    String
+  sentAt     DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model Order {
+  id              String            @id @default(cuid())
+  orderNumber     String            @unique
+  customerId      String
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  stylistId       String
+  stylist         User              @relation("OrderStylist", fields: [stylistId], references: [id])
+  storeId         String
+  store           Store             @relation(fields: [storeId], references: [id])
+  orderValue      Decimal           @db.Decimal(12, 2)
+  measurements    Json
+  customisations  Json?
+  referenceImages String[]
+  priority        Priority          @default(NORMAL)
+  deliveryDate    DateTime
+  status          OrderStatus       @default(CONFIRMED)
+  delayState      DelayState        @default(GREEN)
+  hasEverBeenRed  Boolean           @default(false)
+  stages          ProductionStage[]
+  pardons         DelayPardon[]
+  payments        OrderPayment[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([status, deliveryDate])
+  @@index([delayState])
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  OTHER
+}
+
+enum PaymentKind {
+  ADVANCE
+  PARTIAL
+  FINAL
+  REFUND
+}
+
+model OrderPayment {
+  id           String        @id @default(cuid())
+  orderId      String
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount       Decimal       @db.Decimal(12, 2)
+  method       PaymentMethod @default(CASH)
+  kind         PaymentKind   @default(ADVANCE)
+  note         String?
+  paidAt       DateTime      @default(now())
+  recordedById String?
+  recordedBy   User?         @relation("PaymentRecorder", fields: [recordedById], references: [id])
+  createdAt    DateTime      @default(now())
+
+  @@index([orderId])
+}
+
+model ProductionStage {
+  id             String              @id @default(cuid())
+  orderId        String
+  order          Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type           ProductionStageType
+  sequence       Int
+  ownerId        String?
+  owner          User?               @relation("StageOwner", fields: [ownerId], references: [id])
+  vendorName     String?
+  startDate      DateTime?
+  dueDate        DateTime
+  completionDate DateTime?
+  status         StageStatus         @default(NOT_STARTED)
+  remarks        String?
+  delayState     DelayState          @default(GREEN)
+  hasEverBeenRed Boolean             @default(false)
+  pardons        DelayPardon[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([orderId, type])
+  @@index([status, dueDate])
+  @@index([delayState])
+}
+
+model DelayPardon {
+  id            String           @id @default(cuid())
+  orderId       String?
+  order         Order?           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stageId       String?
+  stage         ProductionStage? @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  reason        String
+  status        PardonStatus     @default(REQUESTED)
+  requestedById String
+  requestedBy   User             @relation("PardonRequester", fields: [requestedById], references: [id])
+  reviewedById  String?
+  reviewedBy    User?            @relation("PardonReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String
+  oldValue  Json?
+  newValue  Json?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+enum InventoryCategory {
+  FABRIC
+  FINISHED_GOOD
+  ACCESSORY
+  PACKAGING
+  OTHER
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum PurchaseStatus {
+  REQUESTED
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+enum IncentiveStatus {
+  PENDING
+  APPROVED
+  PAID
+}
+
+enum WhatsAppTemplateType {
+  STYLIST_FOLLOW_UP
+  PRODUCTION_REMINDER
+  DELAY_ALERT
+  DAILY_OWNER_SUMMARY
+}
+
+model InventoryItem {
+  id           String            @id @default(cuid())
+  sku          String            @unique
+  name         String
+  category     InventoryCategory
+  storeId      String?
+  quantity     Decimal           @default(0) @db.Decimal(12, 2)
+  unit         String            @default("pcs")
+  reorderAt    Decimal?          @db.Decimal(12, 2)
+  costPrice    Decimal?          @db.Decimal(12, 2)
+  sellingPrice Decimal?          @db.Decimal(12, 2)
+  notes        String?
+  movements    StockMovement[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([category])
+  @@index([name])
+  @@index([storeId])
+}
+
+model StockMovement {
+  id              String            @id @default(cuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            StockMovementType
+  quantity        Decimal           @db.Decimal(12, 2)
+  reason          String
+  reference       String?
+  createdById     String?
+  createdAt       DateTime          @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Purchase {
+  id           String         @id @default(cuid())
+  purchaseNo   String         @unique
+  vendorName   String
+  storeId      String?
+  status       PurchaseStatus @default(REQUESTED)
+  totalAmount  Decimal        @default(0) @db.Decimal(12, 2)
+  expectedDate DateTime?
+  receivedDate DateTime?
+  notes        String?
+  lines        PurchaseLine[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([status])
+  @@index([vendorName])
+  @@index([storeId])
+  @@index([createdAt])
+}
+
+model PurchaseLine {
+  id         String   @id @default(cuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  itemName   String
+  quantity   Decimal  @db.Decimal(12, 2)
+  unit       String   @default("pcs")
+  rate       Decimal  @db.Decimal(12, 2)
+  amount     Decimal  @db.Decimal(12, 2)
+}
+
+model PricingTemplate {
+  id              String   @id @default(cuid())
+  name            String
+  baseCost        Decimal  @db.Decimal(12, 2)
+  fabricCost      Decimal  @default(0) @db.Decimal(12, 2)
+  embroideryCost  Decimal  @default(0) @db.Decimal(12, 2)
+  stitchingCost   Decimal  @default(0) @db.Decimal(12, 2)
+  overheadPercent Decimal  @default(20) @db.Decimal(5, 2)
+  marginPercent   Decimal  @default(35) @db.Decimal(5, 2)
+  finalPrice      Decimal  @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Incentive {
+  id         String          @id @default(cuid())
+  userId     String
+  orderId    String?
+  orderValue Decimal         @db.Decimal(12, 2)
+  percentage Decimal         @default(1.5) @db.Decimal(5, 2)
+  amount     Decimal         @db.Decimal(12, 2)
+  status     IncentiveStatus @default(PENDING)
+  notes      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model WhatsAppTemplate {
+  id        String               @id @default(cuid())
+  name      String
+  type      WhatsAppTemplateType
+  message   String
+  active    Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

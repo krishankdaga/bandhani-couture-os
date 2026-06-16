@@ -1,0 +1,12 @@
+node_modules
+.next
+.next-dev
+.next-build
+.next-dev.lock
+.env
+.env.local
+coverage
+*.log
+*.tsbuildinfo
+.DS_Store
+.claude
