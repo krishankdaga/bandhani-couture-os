@@ -30,8 +30,14 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   // (e.g. /orders/abc123), so /production/command-center stays a top-level page.
   const isKnownPage = navigationItems.some((item) => item.href === pathname);
   const detailPage = !isKnownPage && pathname.split("/").filter(Boolean).length > 1;
-  const requiredPermission = permissionForPath(pathname);
-  const ownerOnlyPage = pathname.startsWith("/employees") || pathname.startsWith("/roles") || pathname.startsWith("/assistant") || pathname.startsWith("/data-health");
+  // Employee PROFILE detail pages (/employees/<id>) are permission-aware: the
+  // profile API authorizes the owner (all), managers (their store, when granted
+  // employees.view) and self-view, so the shell lets the page load and leaves the
+  // API as the source of truth — the page itself shows Access Denied on a 403.
+  // The employees LIST/management page (/employees) stays owner-only.
+  const isEmployeeProfile = /^\/employees\/[^/]+$/.test(pathname);
+  const requiredPermission = isEmployeeProfile ? null : permissionForPath(pathname);
+  const ownerOnlyPage = (pathname.startsWith("/employees") && !isEmployeeProfile) || pathname.startsWith("/roles") || pathname.startsWith("/data-health");
   const canViewPage = (!ownerOnlyPage || user.companyStatus === "OWNER") && (!requiredPermission || user.companyStatus === "OWNER" || user.permissions.includes(requiredPermission));
   const sidebarPermissions = user.companyStatus === "OWNER"
     ? user.permissions
@@ -87,7 +93,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
         <div key={pathname} className="page-enter mx-auto max-w-[1500px]">{canViewPage ? children : <AccessDenied />}</div>
       </main>
     </div>
-    {user.companyStatus === "OWNER" && !pathname.startsWith("/assistant") && <CbosAssistant />}
+    {(user.companyStatus === "OWNER" || user.permissions.includes("reports.view")) && !pathname.startsWith("/assistant") && <CbosAssistant />}
     <ToastViewport />
   </div>;
 }
