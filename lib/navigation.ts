@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  ClipboardList, Factory, FileClock, Gauge, KeyRound, MessageSquare, Package, Percent,
-  ReceiptText, Settings, ShoppingBag, Sparkles, UserCog, UserRoundSearch, Users, Bot,
+  ClipboardList, Factory, FileClock, Gauge, HeartPulse, KeyRound, MessageSquare, Package, Percent,
+  RadioTower, ReceiptText, Settings, ShoppingBag, Sparkles, UserCog, UserRoundSearch, Users, Bot,
 } from "lucide-react";
 import type { Permission } from "@/lib/permissions";
 
@@ -16,6 +16,7 @@ export const navigationItems: NavigationItem[] = [
   { label: "Leads", href: "/leads", icon: UserRoundSearch, permission: "leads.view", group: "Clients & Orders" },
   { label: "Customers", href: "/customers", icon: Users, permission: "customers.view", group: "Clients & Orders" },
   { label: "Orders", href: "/orders", icon: ClipboardList, permission: "orders.view", group: "Clients & Orders" },
+  { label: "Command Center", href: "/production/command-center", icon: RadioTower, permission: "production.view", group: "Operations" },
   { label: "Production", href: "/production", icon: Factory, permission: "production.view", group: "Operations" },
   { label: "Inventory", href: "/inventory", icon: Package, permission: "inventory.view", group: "Operations" },
   { label: "Purchases", href: "/purchases", icon: ShoppingBag, permission: "purchases.view", group: "Operations" },
@@ -26,6 +27,7 @@ export const navigationItems: NavigationItem[] = [
   { label: "Bandhani Assistant", href: "/assistant", icon: Bot, permission: "dashboard.view", ownerOnly: true, group: "Business" },
   { label: "Employees", href: "/employees", icon: UserCog, permission: "employees.view", group: "Administration" },
   { label: "Roles & Access", href: "/roles", icon: KeyRound, permission: "roles.view", group: "Administration" },
+  { label: "Data Health", href: "/data-health", icon: HeartPulse, permission: "audit.view", ownerOnly: true, group: "Administration" },
   { label: "Audit Logs", href: "/audit-logs", icon: FileClock, permission: "audit.view", group: "Administration" },
   { label: "Settings", href: "/settings", icon: Settings, permission: "settings.view", group: "Administration" },
 ];

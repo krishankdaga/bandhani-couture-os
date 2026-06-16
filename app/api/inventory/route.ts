@@ -3,7 +3,7 @@ import { InventoryCategory, StockMovementType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isApiError, requireUser, validationError } from "@/lib/api";
-import { INVENTORY_ROLES } from "@/lib/phase2-permissions";
+import { allocationStandingInclude, recommendedPurchaseQty, stockStanding } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
 import { optionalStoreScope } from "@/lib/scope";
 import { writeAudit } from "@/lib/audit";
@@ -28,10 +28,25 @@ export async function GET(request: NextRequest) {
   const items = await prisma.inventoryItem.findMany({
     where: optionalStoreScope(user),
     orderBy: { updatedAt: "desc" },
-    include: { movements: { orderBy: { createdAt: "desc" }, take: 5 } },
+    include: { movements: { orderBy: { createdAt: "desc" }, take: 5 }, ...allocationStandingInclude },
   });
 
-  return NextResponse.json({ items });
+  const enriched = items.map((item) => {
+    const standing = stockStanding(item);
+    // Drop the raw allocations payload; expose the computed standing instead.
+    const { allocations, ...rest } = item;
+    void allocations;
+    return {
+      ...rest,
+      reserved: standing.reserved,
+      available: standing.available,
+      consumed: standing.consumed,
+      shortage: standing.shortage,
+      recommendedPurchase: recommendedPurchaseQty(standing),
+    };
+  });
+
+  return NextResponse.json({ items: enriched });
 }
 
 export async function POST(request: NextRequest) {

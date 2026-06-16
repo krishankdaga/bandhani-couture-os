@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { CreditCard, IndianRupee, Plus, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, CreditCard, IndianRupee, Package, Plus, Scissors, Trash2, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
@@ -20,6 +20,12 @@ type Order = {
   stylist: { name: string }; store: { name: string }; stages: Stage[];
 };
 type Payment = { id: string; amount: string; method: string; kind: string; note: string | null; paidAt: string; recordedBy: { name: string } | null };
+type Material = {
+  id: string; inventoryItemId: string; sku: string; name: string; unit: string;
+  requiredQty: number; consumedQty: number; remainingQty: number; note: string | null; createdBy: string | null;
+  itemOnHand: number; itemReserved: number; itemAvailable: number; itemShortage: number;
+};
+type StockOption = { id: string; sku: string; name: string; unit: string; category: string; onHand: number; available: number };
 
 const STAGE_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"] as const;
 const METHODS = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"] as const;
@@ -90,17 +96,25 @@ export default function OrderSummaryPage() {
   const [payForm, setPayForm] = useState({ amount: "", kind: "ADVANCE", method: "CASH", paidAt: "", note: "" });
   const [savingPay, setSavingPay] = useState(false);
   const [payError, setPayError] = useState("");
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [stockOptions, setStockOptions] = useState<StockOption[]>([]);
+  const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", allowShortage: false });
+  const [savingMat, setSavingMat] = useState(false);
+  const [matError, setMatError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [orderResult, payResult, meResult] = await Promise.all([
+      const [orderResult, payResult, matResult, meResult] = await Promise.all([
         api<{ order: Order }>(`/api/orders/${id}`),
         api<{ payments: Payment[] }>(`/api/orders/${id}/payments`).catch(() => ({ payments: [] })),
+        api<{ materials: Material[]; items: StockOption[] }>(`/api/orders/${id}/materials`).catch(() => ({ materials: [], items: [] })),
         api<{ user: { permissions: string[] } }>("/api/auth/me").catch(() => ({ user: { permissions: [] } })),
       ]);
       setOrder(orderResult.order);
       setPayments(payResult.payments);
+      setMaterials(matResult.materials);
+      setStockOptions(matResult.items);
       setPermissions(meResult.user.permissions);
     } catch (caught) { setError((caught as Error).message); } finally { setLoading(false); }
   }, [id]);
@@ -131,6 +145,41 @@ export default function OrderSummaryPage() {
     catch (caught) { toast((caught as Error).message, "error"); }
   }
 
+  async function reloadMaterials() {
+    const result = await api<{ materials: Material[]; items: StockOption[] }>(`/api/orders/${id}/materials`).catch(() => ({ materials: [], items: [] }));
+    setMaterials(result.materials);
+    setStockOptions(result.items);
+  }
+
+  async function allocate(event: React.FormEvent) {
+    event.preventDefault();
+    setSavingMat(true); setMatError("");
+    try {
+      await api(`/api/orders/${id}/materials`, {
+        method: "POST",
+        body: JSON.stringify({ inventoryItemId: matForm.inventoryItemId, requiredQty: Number(matForm.requiredQty), note: matForm.note || null, allowShortage: matForm.allowShortage }),
+      });
+      toast("Material allocated.");
+      setMatForm({ inventoryItemId: "", requiredQty: "", note: "", allowShortage: false });
+      await reloadMaterials();
+    } catch (caught) { setMatError((caught as Error).message); } finally { setSavingMat(false); }
+  }
+
+  async function consumeMaterial(material: Material) {
+    const input = prompt(`Consume how much ${material.name}? Remaining allocated: ${material.remainingQty} ${material.unit}`, String(material.remainingQty));
+    if (input === null) return;
+    const quantity = Number(input);
+    if (!Number.isFinite(quantity) || quantity <= 0) { toast("Enter a valid quantity.", "error"); return; }
+    try { await api(`/api/orders/${id}/materials/${material.id}/consume`, { method: "POST", body: JSON.stringify({ quantity }) }); toast("Consumption recorded."); await reloadMaterials(); }
+    catch (caught) { toast((caught as Error).message, "error"); }
+  }
+
+  async function removeMaterial(material: Material) {
+    if (!confirm(`Remove the allocation of ${material.name}?`)) return;
+    try { await api(`/api/orders/${id}/materials/${material.id}`, { method: "DELETE" }); toast("Allocation removed."); await reloadMaterials(); }
+    catch (caught) { toast((caught as Error).message, "error"); }
+  }
+
   if (loading) return <LoadingState label="Loading order..." rows={4} />;
   if (error || !order) return <ErrorState message={error || "Order not found."} retry={load} />;
 
@@ -140,6 +189,10 @@ export default function OrderSummaryPage() {
   const net = payments.reduce((sum, p) => sum + (p.kind === "REFUND" ? -Number(p.amount) : Number(p.amount)), 0);
   const balance = Math.max(0, orderValue - net);
   const paidPct = orderValue > 0 ? Math.min(100, Math.round((net / orderValue) * 100)) : 0;
+  const totalRequired = materials.reduce((sum, m) => sum + m.requiredQty, 0);
+  const totalConsumed = materials.reduce((sum, m) => sum + m.consumedQty, 0);
+  const shortageLines = materials.filter((m) => m.itemShortage > 0);
+  const selectedStock = stockOptions.find((s) => s.id === matForm.inventoryItemId);
 
   return (
     <div className="print-summary">
@@ -204,6 +257,54 @@ export default function OrderSummaryPage() {
                 {canEditOrder && <button onClick={() => removePayment(p.id)} className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove payment"><Trash2 size={15} /></button>}
               </div>
             )) : <div className="flex items-center gap-2 py-4 text-sm text-stone-400"><CreditCard size={16} />No payments recorded yet.</div>}
+          </div>
+        </div>
+      </section>
+
+      {/* Materials & allocation */}
+      <section className="card mt-5 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-stone-100 p-5">
+          <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-wine/10 text-wine"><Package size={20} /></span><div><h2 className="font-semibold">Materials &amp; allocation</h2><p className="text-xs text-stone-500">Reserve fabric and supplies for this order, then mark them consumed as production progresses.</p></div></div>
+          {materials.length > 0 && <div className="text-right text-xs text-stone-500"><p className="text-sm font-semibold text-ink">{totalConsumed} / {totalRequired}</p>consumed / allocated</div>}
+        </div>
+        <div className="p-5">
+          {shortageLines.length > 0 && (
+            <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <p><span className="font-semibold">Material shortage.</span> {shortageLines.map((m) => `${m.name} (short ${m.itemShortage} ${m.unit})`).join(", ")}. Raise a purchase to cover the gap.</p>
+            </div>
+          )}
+
+          {canEditOrder && (
+            <form onSubmit={allocate} className="mb-5 grid gap-3 rounded-xl border border-stone-200 bg-stone-50/60 p-4 md:grid-cols-12 md:items-end">
+              <div className="md:col-span-5"><label>Inventory item</label><select required value={matForm.inventoryItemId} onChange={(e) => setMatForm({ ...matForm, inventoryItemId: e.target.value })}><option value="">Choose material…</option>{stockOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.available} {s.unit} available)</option>)}</select></div>
+              <div className="md:col-span-2"><label>Required {selectedStock ? `(${selectedStock.unit})` : ""}</label><input type="number" min="0.01" step="0.01" required value={matForm.requiredQty} onChange={(e) => setMatForm({ ...matForm, requiredQty: e.target.value })} placeholder="12" /></div>
+              <div className="md:col-span-3"><label>Note</label><input value={matForm.note} onChange={(e) => setMatForm({ ...matForm, note: e.target.value })} placeholder="e.g. main body fabric" /></div>
+              <div className="md:col-span-2 flex justify-end"><button disabled={savingMat} className="btn-primary btn-sm flex items-center gap-2"><Plus size={15} />{savingMat ? "Saving..." : "Allocate"}</button></div>
+              {selectedStock && Number(matForm.requiredQty) > selectedStock.available && (
+                <label className="md:col-span-12 flex items-center gap-2 text-xs text-amber-700"><input type="checkbox" className="h-4 w-4" checked={matForm.allowShortage} onChange={(e) => setMatForm({ ...matForm, allowShortage: e.target.checked })} />Only {selectedStock.available} {selectedStock.unit} available — allocate despite shortage (flags a purchase need)</label>
+              )}
+              {matError && <div className="md:col-span-12"><InlineMessage message={matError} /></div>}
+            </form>
+          )}
+
+          <div className="divide-y divide-stone-100">
+            {materials.length ? materials.map((m) => {
+              const pct = m.requiredQty > 0 ? Math.min(100, Math.round((m.consumedQty / m.requiredQty) * 100)) : 0;
+              return (
+                <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">{m.name} <span className="text-xs font-normal text-stone-400">{m.sku}</span>{m.itemShortage > 0 && <span className="badge ml-2 bg-amber-100 text-amber-700">SHORT {m.itemShortage} {m.unit}</span>}</p>
+                    <p className="text-xs text-stone-500">Allocated {m.requiredQty} {m.unit} · consumed {m.consumedQty} · {m.remainingQty} remaining{m.note ? ` · ${m.note}` : ""}</p>
+                    <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-gradient-to-r from-wine to-wine-dark" style={{ width: `${pct}%` }} /></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {canEditProduction && m.remainingQty > 0 && <button onClick={() => consumeMaterial(m)} className="btn-secondary btn-sm flex items-center gap-1"><Scissors size={13} />Consume</button>}
+                    {canEditOrder && m.consumedQty === 0 && <button onClick={() => removeMaterial(m)} className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove allocation"><Trash2 size={15} /></button>}
+                  </div>
+                </div>
+              );
+            }) : <div className="flex items-center gap-2 py-4 text-sm text-stone-400"><Package size={16} />No materials allocated yet.</div>}
           </div>
         </div>
       </section>

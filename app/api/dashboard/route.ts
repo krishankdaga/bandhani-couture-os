@@ -2,6 +2,7 @@ import { DelayState, OrderStatus, StageStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { isApiError, requireUser, validationError } from "@/lib/api";
 import { aggregateOrderDelay, calculateStageDelay, stageLabels } from "@/lib/delay";
+import { recommendedPurchaseQty, stockStanding } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/permissions";
 import { optionalStoreScope, storeScope } from "@/lib/scope";
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
         select: { id: true, name: true, phone: true, status: true, followUpDate: true, stylist: { select: { name: true } } }, orderBy: { followUpDate: "asc" }, take: 6,
       }) : Promise.resolve([]),
       hasPermission(user, "inventory.view") ? prisma.inventoryItem.findMany({
-        where: { ...optionalStoreScope(user), reorderAt: { not: null } }, select: { id: true, sku: true, name: true, quantity: true, reorderAt: true, unit: true }, orderBy: { quantity: "asc" }, take: 30,
+        where: { ...optionalStoreScope(user) }, select: { id: true, sku: true, name: true, quantity: true, reorderAt: true, unit: true, allocations: { select: { requiredQty: true, consumedQty: true, order: { select: { status: true } } } } }, orderBy: { quantity: "asc" },
       }) : Promise.resolve([]),
       hasPermission(user, "purchases.view") ? prisma.purchase.findMany({
         where: { ...optionalStoreScope(user), status: { in: ["REQUESTED", "ORDERED"] } }, select: { id: true, purchaseNo: true, vendorName: true, status: true, expectedDate: true, totalAmount: true }, orderBy: { expectedDate: "asc" }, take: 6,
@@ -94,7 +95,16 @@ export async function GET(request: NextRequest) {
       .map(([type, counts]) => ({ type, label: stageLabels[type as keyof typeof stageLabels], ...counts }))
       .sort((a, b) => b.red - a.red || b.count - a.count);
 
-    const lowStock = inventoryCandidates.filter((item) => Number(item.quantity) <= Number(item.reorderAt)).slice(0, 6);
+    const inventoryStandings = inventoryCandidates.map((item) => ({ item, standing: stockStanding(item) }));
+    const lowStock = inventoryStandings
+      .filter(({ standing }) => standing.belowReorder)
+      .slice(0, 6)
+      .map(({ item }) => ({ id: item.id, sku: item.sku, name: item.name, quantity: item.quantity, reorderAt: item.reorderAt, unit: item.unit }));
+    const shortages = inventoryStandings
+      .filter(({ standing }) => standing.shortage > 0)
+      .sort((a, b) => b.standing.shortage - a.standing.shortage)
+      .slice(0, 6)
+      .map(({ item, standing }) => ({ id: item.id, sku: item.sku, name: item.name, unit: item.unit, shortage: standing.shortage, recommendedQty: recommendedPurchaseQty(standing) }));
     return NextResponse.json({
       generatedAt: now,
       companyStatus: user.companyStatus,
@@ -108,6 +118,7 @@ export async function GET(request: NextRequest) {
         ordersAtRisk: evaluatedOrders.filter((order) => order.currentDelay === DelayState.YELLOW).length,
         delayedOrders: evaluatedOrders.filter((order) => order.currentDelay === DelayState.RED).length,
         deliveriesDueThisWeek: deliveriesDue.length,
+        materialShortages: shortages.length,
       },
       deliveriesDue: deliveriesDue.slice(0, 6).map((order) => ({
         id: order.id, orderNumber: order.orderNumber, orderValue: order.orderValue, deliveryDate: order.deliveryDate,
@@ -121,6 +132,7 @@ export async function GET(request: NextRequest) {
       recentAudit,
       followUps,
       lowStock,
+      shortages,
       pendingPurchases,
     });
   } catch (error) {

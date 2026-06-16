@@ -129,6 +129,7 @@ model User {
   requestedPardons    DelayPardon[]            @relation("PardonRequester")
   reviewedPardons     DelayPardon[]            @relation("PardonReviewer")
   recordedPayments    OrderPayment[]           @relation("PaymentRecorder")
+  allocatedMaterials  OrderMaterial[]          @relation("MaterialAllocator")
   notificationReads   UserNotificationRead[]
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
@@ -276,11 +277,34 @@ model Order {
   stages          ProductionStage[]
   pardons         DelayPardon[]
   payments        OrderPayment[]
+  materials       OrderMaterial[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   @@index([status, deliveryDate])
   @@index([delayState])
+}
+
+/// Bill of materials linking an order to the inventory it requires.
+/// requiredQty = what the order reserves; consumedQty = what production has used.
+/// Reserved stock for an item = sum(requiredQty - consumedQty) across active orders.
+model OrderMaterial {
+  id              String        @id @default(cuid())
+  orderId         String
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  requiredQty     Decimal       @db.Decimal(12, 2)
+  consumedQty     Decimal       @default(0) @db.Decimal(12, 2)
+  note            String?
+  createdById     String?
+  createdBy       User?         @relation("MaterialAllocator", fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([orderId, inventoryItemId])
+  @@index([inventoryItemId])
+  @@index([orderId])
 }
 
 enum PaymentMethod {
@@ -422,6 +446,7 @@ model InventoryItem {
   sellingPrice Decimal?          @db.Decimal(12, 2)
   notes        String?
   movements    StockMovement[]
+  allocations  OrderMaterial[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 

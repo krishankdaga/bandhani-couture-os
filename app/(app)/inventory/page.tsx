@@ -223,12 +223,25 @@ export default function InventoryPage() {
                       </p>
                     </div>
 
-                    <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700">
-                      {String(item.quantity)} {item.unit}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700">
+                        {String(item.quantity)} {item.unit} on hand
+                      </span>
+                      {Number(item.shortage) > 0 && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">
+                          SHORT {Number(item.shortage)} {item.unit}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2 text-sm text-stone-600 md:grid-cols-3">
+                  <div className="mt-3 grid gap-2 rounded-xl bg-stone-50 p-3 text-sm md:grid-cols-3">
+                    <p><span className="text-stone-400">Reserved:</span> <span className="font-semibold">{Number(item.reserved ?? 0)} {item.unit}</span></p>
+                    <p><span className="text-stone-400">Available:</span> <span className={`font-semibold ${Number(item.available ?? 0) < 0 ? "text-amber-700" : "text-emerald-700"}`}>{Number(item.available ?? 0)} {item.unit}</span></p>
+                    <p><span className="text-stone-400">Consumed:</span> <span className="font-semibold">{Number(item.consumed ?? 0)} {item.unit}</span></p>
+                  </div>
+
+                  <div className="mt-2 grid gap-2 text-sm text-stone-600 md:grid-cols-3">
                     <p>Reorder: {item.reorderAt ?? "—"}</p>
                     <p>Cost: {item.costPrice ? money(item.costPrice) : "—"}</p>
                     <p>Selling: {item.sellingPrice ? money(item.sellingPrice) : "—"}</p>

@@ -21,6 +21,20 @@ export function isApiError(value: SessionUser | NextResponse): value is NextResp
   return value instanceof NextResponse;
 }
 
+/**
+ * A predictable, user-facing business-rule violation (e.g. "not enough stock").
+ * Thrown inside route handlers/transactions and surfaced verbatim by validationError
+ * with the given status (default 400), without polluting the expected-message list.
+ */
+export class BusinessError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.name = "BusinessError";
+    this.status = status;
+  }
+}
+
 export async function requireOwner(request: NextRequest): Promise<SessionUser | NextResponse> {
   const user = await requireUser(request);
   if (isApiError(user)) return user;
@@ -38,6 +52,9 @@ export async function requireAnyPermission(request: NextRequest, permissions: Pe
 }
 
 export function validationError(error: unknown) {
+  if (error instanceof BusinessError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
   if (error instanceof ZodError) {
     return NextResponse.json({ error: error.issues[0]?.message || "Invalid request" }, { status: 400 });
   }

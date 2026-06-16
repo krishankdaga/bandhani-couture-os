@@ -37,10 +37,47 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       store: true,
       interactions: { include: { user: { select: { name: true } } }, orderBy: { occurredAt: "desc" } },
       communicationHistory: { orderBy: { sentAt: "desc" } },
-      orders: { orderBy: { createdAt: "desc" } },
+      orders: {
+        orderBy: { createdAt: "desc" },
+        include: { stylist: { select: { name: true } }, payments: { select: { amount: true, kind: true } } },
+      },
     },
   });
-  return customer ? NextResponse.json({ customer }) : NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+
+  // --- Customer 360 aggregates ---
+  const ACTIVE = ["DRAFT", "CONFIRMED", "IN_PRODUCTION", "READY"];
+  const orders = customer.orders;
+  const billedOrders = orders.filter((o) => o.status !== "CANCELLED");
+  const totalRevenue = billedOrders.reduce((sum, o) => sum + Number(o.orderValue), 0);
+  const totalPaid = orders.reduce((sum, o) => sum + o.payments.reduce((s, p) => s + (p.kind === "REFUND" ? -Number(p.amount) : Number(p.amount)), 0), 0);
+  const orderCount = billedOrders.length;
+  const stylistTally = new Map<string, number>();
+  const customisationTally = new Map<string, number>();
+  for (const o of orders) {
+    if (o.stylist?.name) stylistTally.set(o.stylist.name, (stylistTally.get(o.stylist.name) ?? 0) + 1);
+    for (const c of (Array.isArray(o.customisations) ? o.customisations : []) as string[]) {
+      const key = String(c).trim();
+      if (key) customisationTally.set(key, (customisationTally.get(key) ?? 0) + 1);
+    }
+  }
+  const topBy = (map: Map<string, number>, n: number) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name, count]) => ({ name, count }));
+
+  const summary = {
+    totalOrders: orderCount,
+    activeOrders: orders.filter((o) => ACTIVE.includes(o.status)).length,
+    totalRevenue,
+    totalPaid,
+    outstanding: Math.max(0, totalRevenue - totalPaid),
+    averageOrderValue: orderCount ? Math.round(totalRevenue / orderCount) : 0,
+    preferredStylist: topBy(stylistTally, 1)[0]?.name ?? null,
+    favoriteCategories: topBy(customisationTally, 5),
+    interactions: customer.interactions.length,
+    firstOrderDate: billedOrders.length ? billedOrders[billedOrders.length - 1].createdAt : null,
+    lastOrderDate: billedOrders.length ? billedOrders[0].createdAt : null,
+  };
+
+  return NextResponse.json({ customer, summary });
 }
 
 export async function PATCH(
