@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Camera, KeyRound, MapPin, Plus, Save, Store, Trash2, UserRound } from "lucide-react";
+import { Building2, Camera, ChevronDown, ChevronUp, KeyRound, MapPin, Pencil, Plus, Save, Store, Trash2, UserRound, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, InlineMessage, LoadingState } from "@/components/async-state";
 import { Hint } from "@/components/ui";
@@ -11,6 +11,8 @@ import { api, toast } from "@/lib/client";
 type Me = { id: string; name: string; email: string; image: string | null; companyStatus: string; permissions: string[] };
 type Setting = { id: string; key: string; value: unknown };
 type StoreRecord = { id: string; name: string; code: string; location: string | null; _count: { users: number; customers: number; orders: number } };
+type StoreEmployee = { id: string; name: string; email: string; role: string; companyStatus: string; companyRole: { name: string } | null };
+type StoreDetail = { store: StoreRecord; employees: StoreEmployee[]; performance: { totalOrders: number; activeOrders: number; deliveredOrders: number; totalRevenue: number; totalCollected: number; outstanding: number } };
 
 function resizeImage(file: File, max = 256): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -66,6 +68,15 @@ export default function SettingsPage() {
   const [savingStore, setSavingStore] = useState(false);
   const [storeError, setStoreError] = useState("");
   const [showStoreForm, setShowStoreForm] = useState(false);
+
+  // Store expand / edit
+  const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
+  const [storeDetail, setStoreDetail] = useState<StoreDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
+  const [editStoreForm, setEditStoreForm] = useState({ name: "", location: "" });
+  const [savingEditStore, setSavingEditStore] = useState(false);
+  const [editStoreError, setEditStoreError] = useState("");
 
   const isOwner = me?.companyStatus === "OWNER";
   const canEditBusiness = me?.permissions.includes("settings.edit") ?? false;
@@ -167,6 +178,36 @@ export default function SettingsPage() {
     }
   }
 
+  async function toggleStoreDetail(storeId: string) {
+    if (expandedStoreId === storeId) { setExpandedStoreId(null); setStoreDetail(null); return; }
+    setExpandedStoreId(storeId);
+    setStoreDetail(null);
+    setLoadingDetail(true);
+    try {
+      setStoreDetail(await api<StoreDetail>(`/api/stores/${storeId}`));
+    } catch { /* swallow — store detail is optional UI */ } finally { setLoadingDetail(false); }
+  }
+
+  function openEditStore(s: StoreRecord) {
+    setEditingStoreId(s.id);
+    setEditStoreForm({ name: s.name, location: s.location ?? "" });
+    setEditStoreError("");
+  }
+
+  async function saveEditStore(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingStoreId) return;
+    setSavingEditStore(true); setEditStoreError("");
+    try {
+      await api(`/api/stores/${editingStoreId}`, { method: "PATCH", body: JSON.stringify(editStoreForm) });
+      toast("Store updated.");
+      setEditingStoreId(null);
+      await load();
+    } catch (caught) {
+      setEditStoreError((caught as Error).message);
+    } finally { setSavingEditStore(false); }
+  }
+
   if (loading) return <><PageHeader eyebrow="Administration" title="Settings" /><LoadingState label="Loading your settings..." rows={3} /></>;
 
   return (
@@ -256,26 +297,100 @@ export default function SettingsPage() {
               </form>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="space-y-3">
               {stores.length ? stores.map((s) => (
-                <div key={s.id} className="card p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold truncate">{s.name}</p>
-                      <p className="mt-0.5 text-xs font-mono text-stone-400">{s.code}</p>
+                <div key={s.id} className="card overflow-hidden">
+                  {/* Store card header */}
+                  <div className="flex items-center justify-between gap-3 p-4">
+                    <button type="button" onClick={() => toggleStoreDetail(s.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-wine/10 text-wine"><Store size={17} /></span>
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate">{s.name} <span className="ml-1 text-xs font-mono font-normal text-stone-400">{s.code}</span></p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-stone-500">
+                          {s.location && <span className="flex items-center gap-1"><MapPin size={11} />{s.location}</span>}
+                          <span><span className="font-semibold text-ink">{s._count.users}</span> staff</span>
+                          <span><span className="font-semibold text-ink">{s._count.customers}</span> customers</span>
+                          <span><span className="font-semibold text-ink">{s._count.orders}</span> orders</span>
+                        </div>
+                      </div>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button type="button" onClick={() => openEditStore(s)} className="flex items-center gap-1.5 rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:border-wine/30 hover:text-wine"><Pencil size={12} />Edit</button>
+                      <button type="button" onClick={() => toggleStoreDetail(s.id)} className="rounded-lg border border-stone-200 p-1.5 text-stone-400 hover:bg-stone-50">
+                        {expandedStoreId === s.id ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                      </button>
                     </div>
-                    <span className="shrink-0 rounded-lg bg-stone-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-stone-500">Active</span>
                   </div>
-                  {s.location && (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-stone-500"><MapPin size={12} />{s.location}</div>
+
+                  {/* Inline edit form */}
+                  {editingStoreId === s.id && (
+                    <form onSubmit={saveEditStore} className="border-t border-stone-100 bg-stone-50/60 p-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label>Store name</label>
+                          <input value={editStoreForm.name} onChange={(e) => setEditStoreForm({ ...editStoreForm, name: e.target.value })} required minLength={2} />
+                        </div>
+                        <div>
+                          <label>Location / City</label>
+                          <input value={editStoreForm.location} onChange={(e) => setEditStoreForm({ ...editStoreForm, location: e.target.value })} placeholder="Ahmedabad" />
+                        </div>
+                      </div>
+                      {editStoreError && <p className="mt-2 text-xs text-red-600">{editStoreError}</p>}
+                      <div className="mt-3 flex gap-2">
+                        <button disabled={savingEditStore} className="btn-primary btn-sm flex items-center gap-1.5"><Save size={13} />{savingEditStore ? "Saving..." : "Save"}</button>
+                        <button type="button" onClick={() => setEditingStoreId(null)} className="btn-secondary btn-sm flex items-center gap-1.5"><X size={13} />Cancel</button>
+                      </div>
+                    </form>
                   )}
-                  <div className="mt-3 flex gap-3 border-t border-stone-100 pt-3 text-xs text-stone-500">
-                    <span><span className="font-semibold text-ink">{s._count.users}</span> staff</span>
-                    <span><span className="font-semibold text-ink">{s._count.customers}</span> customers</span>
-                    <span><span className="font-semibold text-ink">{s._count.orders}</span> orders</span>
-                  </div>
+
+                  {/* Expanded detail panel */}
+                  {expandedStoreId === s.id && (
+                    <div className="border-t border-stone-100 p-4">
+                      {loadingDetail && <p className="text-xs text-stone-400">Loading store details…</p>}
+                      {storeDetail && storeDetail.store.id === s.id && (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {/* Performance */}
+                          <div>
+                            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-stone-400">Performance</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                ["Total orders", storeDetail.performance.totalOrders],
+                                ["Active orders", storeDetail.performance.activeOrders],
+                                ["Delivered", storeDetail.performance.deliveredOrders],
+                                ["Revenue", `₹${Number(storeDetail.performance.totalRevenue).toLocaleString("en-IN")}`],
+                                ["Collected", `₹${Number(storeDetail.performance.totalCollected).toLocaleString("en-IN")}`],
+                                ["Outstanding", `₹${Number(storeDetail.performance.outstanding).toLocaleString("en-IN")}`],
+                              ].map(([label, val]) => (
+                                <div key={String(label)} className="rounded-xl bg-stone-50 p-3">
+                                  <p className="text-[10px] uppercase tracking-wide text-stone-400">{label}</p>
+                                  <p className="mt-1 text-sm font-semibold">{val}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Employees */}
+                          <div>
+                            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-stone-400">Staff ({storeDetail.employees.length})</p>
+                            <div className="space-y-2">
+                              {storeDetail.employees.length ? storeDetail.employees.map((e) => (
+                                <div key={e.id} className="flex items-center gap-3 rounded-xl bg-stone-50 p-3">
+                                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-wine to-wine-dark text-[10px] font-bold text-white">
+                                    {e.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium truncate">{e.name}</p>
+                                    <p className="text-xs text-stone-400 truncate">{e.companyRole?.name ?? e.role.replaceAll("_", " ")} · {e.companyStatus.replaceAll("_", " ")}</p>
+                                  </div>
+                                </div>
+                              )) : <p className="text-xs text-stone-400">No staff assigned to this store.</p>}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )) : <div className="xl:col-span-3"><EmptyState message="No stores found." /></div>}
+              )) : <EmptyState message="No stores found." />}
             </div>
           </div>
         )}

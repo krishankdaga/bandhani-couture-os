@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 import { api, money, toast } from "@/lib/client";
 
 const categories = ["FABRIC", "FINISHED_GOOD", "ACCESSORY", "PACKAGING", "OTHER"];
+const UNITS = ["metres", "yards", "pcs", "rolls", "kg", "grams", "litres", "sets", "pairs"];
 
 export default function InventoryPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -18,7 +19,7 @@ export default function InventoryPage() {
     name: "",
     category: "FABRIC",
     quantity: 0,
-    unit: "pcs",
+    unit: "metres",
     reorderAt: "",
     costPrice: "",
     sellingPrice: "",
@@ -54,7 +55,7 @@ export default function InventoryPage() {
       name: "",
       category: "FABRIC",
       quantity: 0,
-      unit: "pcs",
+      unit: "metres",
       reorderAt: "",
       costPrice: "",
       sellingPrice: "",
@@ -182,7 +183,16 @@ export default function InventoryPage() {
             <Input label="Opening Quantity" type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: Number(v) })} />
           )}
 
-          <Input label="Unit" value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} />
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Unit</span>
+            <select
+              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              value={UNITS.includes(form.unit) ? form.unit : "pcs"}
+              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+            >
+              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </label>
           <Input label="Reorder Level" type="number" value={form.reorderAt} onChange={(v) => setForm({ ...form, reorderAt: v })} />
           <Input label="Cost Price" type="number" value={form.costPrice} onChange={(v) => setForm({ ...form, costPrice: v })} />
           <Input label="Selling Price" type="number" value={form.sellingPrice} onChange={(v) => setForm({ ...form, sellingPrice: v })} />
