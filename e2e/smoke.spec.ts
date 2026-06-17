@@ -184,8 +184,8 @@ test.describe.serial("Core workflows", () => {
     // Receive the purchase into inventory — scoped to this purchase's card so we
     // don't touch other purchases or the hidden status-filter options.
     const card = page.locator("div.p-5").filter({ hasText: `Smoke Vendor ${tag}` });
-    await card.getByRole("button", { name: "Receive Stock" }).click(); // start receiving
-    await card.getByRole("button", { name: "Receive Stock" }).click(); // submit
+    await card.getByRole("button", { name: "Receive stock" }).click(); // start receiving
+    await card.getByRole("button", { name: "Confirm receipt" }).click(); // submit
     await expect(card.getByText(/Received/)).toBeVisible();
   });
 

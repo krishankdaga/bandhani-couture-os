@@ -158,7 +158,7 @@ export default function PurchasesPage() {
             onChange={(v) => setForm({ ...form, notes: v })}
           />
 
-          <button className="w-full rounded-xl bg-wine px-4 py-2 text-sm font-semibold text-white">
+          <button className="btn-primary w-full">
             Add Purchase
           </button>
         </form>
@@ -239,7 +239,7 @@ export default function PurchasesPage() {
                               Category
                             </span>
                             <select
-                              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                              className="mt-1"
                               value={receiveLines[line.id]?.category || "OTHER"}
                               onChange={(e) =>
                                 setReceiveLines((prev) => ({
@@ -272,9 +272,9 @@ export default function PurchasesPage() {
                   {purchase.status !== "RECEIVED" && receivingId !== purchase.id && (
                     <button
                       onClick={() => startReceiving(purchase)}
-                      className="rounded-xl border px-3 py-2 text-sm"
+                      className="btn-secondary btn-sm"
                     >
-                      Receive Stock
+                      Receive stock
                     </button>
                   )}
 
@@ -282,9 +282,9 @@ export default function PurchasesPage() {
                     <>
                       <button
                         onClick={() => receivePurchase(purchase)}
-                        className="rounded-xl bg-wine px-3 py-2 text-sm font-semibold text-white"
+                        className="btn-primary btn-sm"
                       >
-                        Receive Stock
+                        Confirm receipt
                       </button>
 
                       <button
@@ -292,7 +292,7 @@ export default function PurchasesPage() {
                           setReceivingId(null);
                           setReceiveLines({});
                         }}
-                        className="rounded-xl border px-3 py-2 text-sm"
+                        className="btn-secondary btn-sm"
                       >
                         Cancel
                       </button>
@@ -332,7 +332,7 @@ function Input({
       </span>
       <input
         type={type}
-        className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-wine"
+        className="mt-1"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

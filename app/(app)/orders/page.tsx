@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowRight, ClipboardList, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { api, money, shortDate, toast } from "@/lib/client";
@@ -418,7 +418,12 @@ export default function OrdersPage() {
       {pageError && <div className="mb-4"><ErrorState message={pageError} retry={load} /></div>}
 
       {loading ? <LoadingState label="Loading orders..." /> : !orders.length ? (
-        <EmptyState message={canWrite ? "No orders yet. Create an order for an existing customer." : "No orders are assigned to your store or current access."} />
+        <EmptyState
+          icon={<ClipboardList size={22} />}
+          title={canWrite ? "No orders yet" : "Nothing assigned to you"}
+          message={canWrite ? "Create your first couture order to start tracking measurements, materials and delivery." : "No orders are assigned to your store or current access yet."}
+          action={canWrite ? <button className="btn-primary" onClick={() => setShow(true)}>+ New order</button> : undefined}
+        />
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full">

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Clock3, UserRound } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, Clock3, Factory, UserRound } from "lucide-react";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -171,7 +171,7 @@ export default function ProductionPage() {
         <ChevronRight size={15} /><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${customerId ? "bg-wine text-white" : "bg-stone-200"}`}>2</span><span>Select order</span>
         <ChevronRight size={15} /><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${orderId ? "bg-wine text-white" : "bg-stone-200"}`}>3</span><span>Update stages</span>
       </div>
-      {!customers.length ? <EmptyState message="No production work matches these filters. Clear filters to see all active orders." /> : <div className="grid gap-4 md:grid-cols-2">
+      {!customers.length ? <EmptyState icon={<Factory size={22} />} title="No matching production work" message="No active orders match these filters. Clear the filters to see all work in the atelier." action={<button onClick={clearFilters} className="btn-secondary">Clear filters</button>} /> : <div className="grid gap-4 md:grid-cols-2">
         <div><label htmlFor="production-customer">Customer</label><select id="production-customer" value={customerId} onChange={(event) => chooseCustomer(event.target.value)}><option value="">Choose a customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.phone}</option>)}</select><p className="mt-1 text-xs text-stone-400">Only customers with active orders are listed.</p></div>
         <div><label htmlFor="production-order">Order</label><select id="production-order" disabled={!customerId} value={orderId} onChange={(event) => chooseOrder(event.target.value)}><option value="">{customerId ? "Choose an order" : "Select a customer first"}</option>{customerOrders.map((order) => <option key={order.id} value={order.id}>{order.orderNumber} · Delivery {shortDate(order.deliveryDate)}</option>)}</select><p className="mt-1 text-xs text-stone-400">Select the order you want to review.</p></div>
       </div>}

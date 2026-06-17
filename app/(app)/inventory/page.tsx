@@ -169,7 +169,7 @@ export default function InventoryPage() {
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Category</span>
             <select
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="mt-1"
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
             >
@@ -186,7 +186,7 @@ export default function InventoryPage() {
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Unit</span>
             <select
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="mt-1"
               value={UNITS.includes(form.unit) ? form.unit : "pcs"}
               onChange={(e) => setForm({ ...form, unit: e.target.value })}
             >
@@ -198,7 +198,7 @@ export default function InventoryPage() {
           <Input label="Selling Price" type="number" value={form.sellingPrice} onChange={(v) => setForm({ ...form, sellingPrice: v })} />
           <Input label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
 
-          <button className="w-full rounded-xl bg-wine px-4 py-2 text-sm font-semibold text-white">
+          <button className="btn-primary w-full">
             {editingId ? "Save Changes" : "Add Item"}
           </button>
         </form>
@@ -263,7 +263,7 @@ export default function InventoryPage() {
                     <form onSubmit={saveMovement} className="mt-4 rounded-xl bg-sand p-4">
                       <div className="grid gap-3 md:grid-cols-4">
                         <select
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                          aria-label="Movement type"
                           value={movement.type}
                           onChange={(e) => setMovement({ ...movement, type: e.target.value })}
                         >
@@ -274,20 +274,21 @@ export default function InventoryPage() {
 
                         <input
                           type="number"
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                          aria-label="Quantity"
+                          placeholder="Quantity"
                           value={movement.quantity}
                           onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })}
                         />
 
                         <input
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                          aria-label="Reason"
                           placeholder="Reason"
                           value={movement.reason}
                           onChange={(e) => setMovement({ ...movement, reason: e.target.value })}
                         />
 
                         <input
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                          aria-label="Reference"
                           placeholder="Reference"
                           value={movement.reference}
                           onChange={(e) => setMovement({ ...movement, reference: e.target.value })}
@@ -295,10 +296,10 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="mt-3 flex gap-2">
-                        <button className="rounded-xl bg-wine px-4 py-2 text-sm font-semibold text-white">
-                          Save Movement
+                        <button className="btn-primary btn-sm">
+                          Save movement
                         </button>
-                        <button type="button" onClick={() => setMovementItemId(null)} className="rounded-xl border px-4 py-2 text-sm">
+                        <button type="button" onClick={() => setMovementItemId(null)} className="btn-secondary btn-sm">
                           Cancel
                         </button>
                       </div>
@@ -306,13 +307,13 @@ export default function InventoryPage() {
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => editItem(item)} className="rounded-xl border px-3 py-2 text-sm">
+                    <button onClick={() => editItem(item)} className="btn-secondary btn-sm">
                       Edit
                     </button>
-                    <button onClick={() => setMovementItemId(item.id)} className="rounded-xl border px-3 py-2 text-sm">
-                      Stock In / Out
+                    <button onClick={() => setMovementItemId(item.id)} className="btn-secondary btn-sm">
+                      Stock in / out
                     </button>
-                    <button onClick={() => deleteItem(item.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700">
+                    <button onClick={() => deleteItem(item.id)} className="btn-danger btn-sm">
                       Delete
                     </button>
                   </div>
@@ -348,7 +349,7 @@ function Input({
       </span>
       <input
         type={type}
-        className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-wine"
+        className="mt-1"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
