@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Save, ShieldCheck } from "lucide-react";
+import { Plus, Save, ShieldCheck, Users } from "lucide-react";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { PageHeader } from "@/components/page-header";
 import { PermissionChecklist } from "@/components/permission-checklist";
-import { api } from "@/lib/client";
+import { Drawer } from "@/components/drawer";
+import { api, toast } from "@/lib/client";
 
 type RoleItem = { id: string; name: string; description: string | null; isSystem: boolean; permissions: Array<{ permission: string }>; _count?: { users: number } };
 const blank = { name: "", description: "", permissions: [] as string[] };
@@ -13,43 +14,89 @@ const blank = { name: "", description: "", permissions: [] as string[] };
 export default function RolesPage() {
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(blank);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   async function load(select?: string) {
     setLoading(true); setError("");
     try {
       const data = await api<{ roles: RoleItem[] }>("/api/roles");
       setRoles(data.roles);
-      const id = select ?? selectedId ?? data.roles[0]?.id ?? null;
-      const role = data.roles.find((item) => item.id === id);
-      setSelectedId(id); setForm(role ? { name: role.name, description: role.description ?? "", permissions: role.permissions.map((item) => item.permission) } : blank);
+      if (select) { const role = data.roles.find((item) => item.id === select); if (role) selectRole(role); }
     } catch (caught) { setError((caught as Error).message); }
     finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
 
-  function select(role: RoleItem) {
-    setSelectedId(role.id); setMessage("");
+  function selectRole(role: RoleItem) {
+    setSelectedId(role.id);
     setForm({ name: role.name, description: role.description ?? "", permissions: role.permissions.map((item) => item.permission) });
   }
+  function openCreate() { setSelectedId(null); setForm(blank); setError(""); setShowForm(true); }
+  function openEdit(role: RoleItem) { selectRole(role); setError(""); setShowForm(true); }
+  function closeForm() { setShowForm(false); setSelectedId(null); setForm(blank); setError(""); }
+
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setSaving(true); setError(""); setMessage("");
+    event.preventDefault(); setSaving(true); setError("");
     try {
       const result = await api<{ role: RoleItem }>(selectedId ? `/api/roles/${selectedId}` : "/api/roles", { method: selectedId ? "PATCH" : "POST", body: JSON.stringify(form) });
-      setMessage(selectedId ? "Role access updated." : "Role created."); await load(result.role.id);
+      toast(selectedId ? "Role access updated." : "Role created.");
+      setShowForm(false);
+      await load(result.role.id);
+      setShowForm(false);
     } catch (caught) { setError((caught as Error).message); }
     finally { setSaving(false); }
   }
 
   return <>
-    <PageHeader eyebrow="Owner controls" title="Roles & Access" description="Create reusable company roles and choose exactly which Couture OS actions each role can perform." action={<button className="btn-secondary flex items-center gap-2" onClick={() => { setSelectedId(null); setForm(blank); setMessage(""); }}><Plus size={16} />New role</button>} />
-    {loading ? <LoadingState label="Loading roles and permissions..." /> : error && !roles.length ? <ErrorState message={error} retry={() => load()} /> : <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
-      <aside className="card h-fit overflow-hidden"><div className="border-b border-stone-100 p-4"><p className="text-xs font-bold uppercase tracking-wide text-stone-400">Company roles</p></div>{roles.length ? <div className="divide-y divide-stone-100">{roles.map((role) => <button key={role.id} onClick={() => select(role)} className={`w-full p-4 text-left ${selectedId === role.id ? "bg-wine/5" : "hover:bg-stone-50"}`}><div className="flex items-center justify-between gap-2"><span className="font-semibold">{role.name}</span>{role.isSystem && <ShieldCheck size={15} className="text-gold" />}</div><p className="mt-1 text-xs text-stone-500">{role.permissions.length} permissions · {role._count?.users ?? 0} users</p></button>)}</div> : <div className="p-4"><EmptyState message="No roles created yet." /></div>}</aside>
-      <form onSubmit={submit} className="card p-5 md:p-6"><div className="grid gap-4 md:grid-cols-2"><div><label>Role name</label><input required minLength={2} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Store Manager" /></div><div><label>Description</label><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Manages store sales and daily operations" /></div></div><div className="my-5 border-t border-stone-100" /><div className="mb-4"><h2 className="font-semibold">Module permissions</h2><p className="mt-1 text-xs text-stone-500">Changes apply to assigned users after they refresh the app.</p></div><PermissionChecklist value={form.permissions} onChange={(permissions) => setForm({ ...form, permissions })} />{error && <div className="mt-4"><InlineMessage message={error} /></div>}{message && <div className="mt-4"><InlineMessage tone="success" message={message} /></div>}<div className="mt-5 flex justify-end"><button disabled={saving} className="btn-primary flex items-center gap-2"><Save size={16} />{saving ? "Saving..." : selectedId ? "Save role" : "Create role"}</button></div></form>
-    </div>}
+    <PageHeader eyebrow="Owner controls" title="Roles & Access" description="Create reusable company roles and choose exactly which Couture OS actions each role can perform." action={<button className="btn-primary flex items-center gap-2" onClick={openCreate}><Plus size={16} />New role</button>} />
+
+    {loading ? <LoadingState label="Loading roles and permissions..." /> : error && !roles.length ? <ErrorState message={error} retry={() => load()} /> : roles.length ? (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {roles.map((role) => (
+          <button key={role.id} onClick={() => openEdit(role)} className="card card-hover p-5 text-left">
+            <div className="flex items-start justify-between gap-2">
+              <span className="font-semibold">{role.name}</span>
+              {role.isSystem && <span className="flex items-center gap-1 text-[11px] font-semibold text-gold"><ShieldCheck size={14} />System</span>}
+            </div>
+            {role.description && <p className="mt-1 text-xs text-stone-500 line-clamp-2">{role.description}</p>}
+            <div className="mt-4 flex items-center gap-4 border-t border-stone-100 pt-3 text-xs text-stone-500">
+              <span><span className="font-semibold text-ink">{role.permissions.length}</span> permissions</span>
+              <span className="flex items-center gap-1"><Users size={13} className="text-stone-400" /><span className="font-semibold text-ink">{role._count?.users ?? 0}</span> users</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    ) : <EmptyState title="No roles yet" message="Create your first company role to control access." action={<button className="btn-primary" onClick={openCreate}>New role</button>} />}
+
+    <Drawer
+      open={showForm}
+      onClose={closeForm}
+      title={selectedId ? "Edit role" : "New role"}
+      description="Choose exactly which actions this role can perform."
+      width="max-w-3xl"
+      footer={
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={closeForm} className="btn-secondary btn-sm">Cancel</button>
+          <button form="role-form" disabled={saving} className="btn-primary btn-sm flex items-center gap-1.5"><Save size={15} />{saving ? "Saving..." : selectedId ? "Save role" : "Create role"}</button>
+        </div>
+      }
+    >
+      <form id="role-form" onSubmit={submit} className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div><label>Role name</label><input required minLength={2} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Store Manager" /></div>
+          <div><label>Description</label><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Manages store sales and daily operations" /></div>
+        </div>
+        <div className="border-t border-stone-100 pt-5">
+          <h2 className="font-semibold">Module permissions</h2>
+          <p className="mb-4 mt-1 text-xs text-stone-500">Changes apply to assigned users after they refresh the app.</p>
+          <PermissionChecklist value={form.permissions} onChange={(permissions) => setForm({ ...form, permissions })} />
+        </div>
+        {error && <InlineMessage message={error} />}
+      </form>
+    </Drawer>
   </>;
 }

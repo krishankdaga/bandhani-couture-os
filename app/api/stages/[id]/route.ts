@@ -55,18 +55,25 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       const newStatus = delivered ? OrderStatus.DELIVERED : allComplete ? OrderStatus.READY : OrderStatus.IN_PRODUCTION;
       await tx.order.update({ where: { id: old.orderId }, data: { delayState: orderDelay, hasEverBeenRed: orderHasBeenRed, status: newStatus } });
 
-      // On-time delivery incentive: if the order shipped on or before its promised
-      // delivery date and the stylist has a configured incentive, create a single
-      // PENDING incentive for them (idempotent per order + stylist).
+      // Delivery incentive: if the stylist has a configured incentive, create a
+      // single PENDING incentive when the order ships on time — OR late but with
+      // an approved delay pardon (the owner then approves/rejects it). Idempotent
+      // per order + stylist.
       if (delivered && order.stylistId) {
-        const completion = deliveryStage?.completionDate ?? new Date();
-        const deadline = new Date(order.deliveryDate); deadline.setHours(23, 59, 59, 999);
         const incentiveAmount = order.stylist?.incentiveAmount ? Number(order.stylist.incentiveAmount) : 0;
-        if (completion <= deadline && incentiveAmount > 0) {
-          const existing = await tx.incentive.findFirst({ where: { orderId: old.orderId, userId: order.stylistId } });
-          if (!existing) {
-            const incentive = await tx.incentive.create({ data: { userId: order.stylistId, orderId: old.orderId, orderValue: order.orderValue, percentage: 0, amount: incentiveAmount, status: IncentiveStatus.PENDING, notes: "On-time delivery incentive" } });
-            await writeAudit(tx, { userId: user.id, action: "CREATE", entity: "Incentive", entityId: incentive.id, newValue: incentive });
+        if (incentiveAmount > 0) {
+          const completion = deliveryStage?.completionDate ?? new Date();
+          const deadline = new Date(order.deliveryDate); deadline.setHours(23, 59, 59, 999);
+          const onTime = completion <= deadline;
+          // A pardon on the order or any of its stages excuses a late delivery.
+          const pardonApproved = !onTime
+            && (await tx.delayPardon.count({ where: { status: "APPROVED", OR: [{ orderId: old.orderId }, { stage: { orderId: old.orderId } }] } })) > 0;
+          if (onTime || pardonApproved) {
+            const existing = await tx.incentive.findFirst({ where: { orderId: old.orderId, userId: order.stylistId } });
+            if (!existing) {
+              const incentive = await tx.incentive.create({ data: { userId: order.stylistId, orderId: old.orderId, orderValue: order.orderValue, percentage: 0, amount: incentiveAmount, status: IncentiveStatus.PENDING, notes: onTime ? "On-time delivery incentive" : "Late delivery — pardon approved" } });
+              await writeAudit(tx, { userId: user.id, action: "CREATE", entity: "Incentive", entityId: incentive.id, newValue: incentive });
+            }
           }
         }
       }

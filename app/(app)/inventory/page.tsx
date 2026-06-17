@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { Download } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { api, money, toast } from "@/lib/client";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Drawer } from "@/components/drawer";
@@ -14,6 +14,7 @@ export default function InventoryPage() {
   const { confirm } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [movementItemId, setMovementItemId] = useState<string | null>(null);
   const [search, setSearch] = useState(""); const [categoryFilter, setCategoryFilter] = useState("ALL"); const [lowOnly, setLowOnly] = useState(false); const [movementFilter, setMovementFilter] = useState("ALL"); const [sort, setSort] = useState("NEWEST");
 
@@ -93,12 +94,24 @@ export default function InventoryPage() {
 
     const wasEditing = Boolean(editingId);
     resetForm();
+    setFormOpen(false);
     await load();
     toast(wasEditing ? "Inventory item updated." : "Inventory item created.");
   }
 
+  function openCreate() {
+    resetForm();
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    resetForm();
+    setFormOpen(false);
+  }
+
   function editItem(item: any) {
     setEditingId(item.id);
+    setFormOpen(true);
     setForm({
       sku: item.sku,
       name: item.name,
@@ -152,65 +165,16 @@ export default function InventoryPage() {
         eyebrow="Phase 2 unlocked"
         title="Inventory"
         description="Track fabrics, accessories, packaging and finished stock."
-        action={<a href="/api/export/inventory" className="btn-secondary flex items-center gap-2"><Download size={16} />Export CSV</a>}
+        action={
+          <div className="flex items-center gap-2">
+            <a href="/api/export/inventory" className="btn-secondary flex items-center gap-2"><Download size={16} />Export CSV</a>
+            <button type="button" onClick={openCreate} className="btn-primary flex items-center gap-2"><Plus size={16} />Add item</button>
+          </div>
+        }
       />
       <div className="card mb-5 p-4"><div className="mb-3"><h2 className="font-semibold">Find inventory</h2><p className="text-xs text-stone-500">Search stock, focus on low quantities, or sort by value.</p></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search SKU, name or category"/><select value={categoryFilter} onChange={(e)=>setCategoryFilter(e.target.value)}><option value="ALL">All categories</option>{categories.map((item)=><option key={item}>{item}</option>)}</select><select value={movementFilter} onChange={(e)=>setMovementFilter(e.target.value)}><option value="ALL">All movements</option><option value="IN">Stock In</option><option value="OUT">Stock Out</option><option value="ADJUSTMENT">Adjustment</option></select><select value={sort} onChange={(e)=>setSort(e.target.value)}><option value="NEWEST">Newest</option><option value="NAME">Name</option><option value="QUANTITY">Quantity: low to high</option><option value="VALUE">Stock value: high to low</option></select><label className="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 normal-case tracking-normal"><input type="checkbox" className="h-4 w-4" checked={lowOnly} onChange={(e)=>setLowOnly(e.target.checked)}/><span className="text-sm">Low stock only</span></label></div><p className="mt-3 text-xs text-stone-500">Showing {filteredItems.length} of {items.length} items.</p></div>
 
-      <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
-        <form onSubmit={save} className="card sticky top-24 self-start space-y-4 p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              {editingId ? "Edit Item" : "Add New"}
-            </h2>
-
-            {editingId && (
-              <button type="button" onClick={resetForm} className="text-sm text-stone-500">
-                Cancel
-              </button>
-            )}
-          </div>
-
-          <Input label="SKU" value={form.sku} onChange={(v) => setForm({ ...form, sku: v })} />
-          <Input label="Item Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Category</span>
-            <select
-              className="mt-1"
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            >
-              {categories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-
-          {!editingId && (
-            <Input label="Opening Quantity" type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: Number(v) })} />
-          )}
-
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Unit</span>
-            <select
-              className="mt-1"
-              value={UNITS.includes(form.unit) ? form.unit : "pcs"}
-              onChange={(e) => setForm({ ...form, unit: e.target.value })}
-            >
-              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
-          </label>
-          <Input label="Reorder Level" type="number" value={form.reorderAt} onChange={(v) => setForm({ ...form, reorderAt: v })} />
-          <Input label="Cost Price" type="number" value={form.costPrice} onChange={(v) => setForm({ ...form, costPrice: v })} />
-          <Input label="Selling Price" type="number" value={form.sellingPrice} onChange={(v) => setForm({ ...form, sellingPrice: v })} />
-          <Input label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
-
-          <button className="btn-primary w-full">
-            {editingId ? "Save Changes" : "Add Item"}
-          </button>
-        </form>
-
-        <div className="card overflow-hidden">
+      <div className="card overflow-hidden">
           <div className="border-b border-stone-100 px-5 py-4">
             <h2 className="text-lg font-semibold">Records</h2>
             <p className="text-sm text-stone-500">{filteredItems.length} matching records</p>
@@ -285,8 +249,42 @@ export default function InventoryPage() {
               <div className="p-8 text-center text-sm text-stone-500">No inventory matches these filters. Clear filters or add a new item.</div>
             )}
           </div>
-        </div>
       </div>
+
+      <Drawer
+        open={formOpen}
+        onClose={closeForm}
+        title={editingId ? "Edit item" : "New inventory item"}
+        description={editingId ? "Update item details. Adjust quantity via Stock in / out." : "Add a fabric, accessory, packaging or finished item."}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={closeForm} className="btn-secondary btn-sm">Cancel</button>
+            <button form="inventory-form" className="btn-primary btn-sm flex items-center gap-1.5"><Plus size={14} />{editingId ? "Save changes" : "Add item"}</button>
+          </div>
+        }
+      >
+        <form id="inventory-form" onSubmit={save} className="grid gap-4 sm:grid-cols-2">
+          <Input label="SKU" value={form.sku} onChange={(v) => setForm({ ...form, sku: v })} />
+          <Input label="Item Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Category</span>
+            <select className="mt-1" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+              {categories.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Unit</span>
+            <select className="mt-1" value={UNITS.includes(form.unit) ? form.unit : "pcs"} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
+              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </label>
+          {!editingId && <Input label="Opening Quantity" type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: Number(v) })} />}
+          <Input label="Reorder Level" type="number" value={form.reorderAt} onChange={(v) => setForm({ ...form, reorderAt: v })} />
+          <Input label="Cost Price" type="number" value={form.costPrice} onChange={(v) => setForm({ ...form, costPrice: v })} />
+          <Input label="Selling Price" type="number" value={form.sellingPrice} onChange={(v) => setForm({ ...form, sellingPrice: v })} />
+          <div className="sm:col-span-2"><Input label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} /></div>
+        </form>
+      </Drawer>
 
       <Drawer
         open={!!movementItemId}

@@ -156,12 +156,15 @@ test.describe.serial("Core workflows", () => {
   test("add inventory item + stock in + stock out", async ({ page }) => {
     await login(page, FX.owner.email);
     await navLink(page, "Inventory").click();
-    await page.getByLabel("SKU").fill(sku);
-    await page.getByLabel("Item Name").fill(`Smoke Fabric ${tag}`);
-    await page.getByLabel("Opening Quantity").fill("100");
-    await page.getByLabel("Reorder Level").fill("10");
-    await page.getByLabel("Cost Price").fill("50");
-    await page.getByRole("button", { name: "Add Item" }).click();
+    // Create-in-drawer: open the drawer, then fill the form inside it.
+    await page.getByRole("button", { name: "Add item" }).click();
+    const itemDrawer = page.getByRole("dialog", { name: "New inventory item" });
+    await itemDrawer.getByLabel("SKU").fill(sku);
+    await itemDrawer.getByLabel("Item Name").fill(`Smoke Fabric ${tag}`);
+    await itemDrawer.getByLabel("Opening Quantity").fill("100");
+    await itemDrawer.getByLabel("Reorder Level").fill("10");
+    await itemDrawer.getByLabel("Cost Price").fill("50");
+    await itemDrawer.getByRole("button", { name: "Add item" }).click();
     await expect(page.getByText(sku).first()).toBeVisible();
 
     // Stock movement (IN then OUT) on the item we just created.
