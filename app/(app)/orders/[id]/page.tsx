@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { api, money, shortDate, toast } from "@/lib/client";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type Stage = {
   id: string; type: string; sequence: number; status: string; delayState: string;
@@ -111,6 +112,7 @@ function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean;
 
 export default function OrderSummaryPage() {
   const { id } = useParams<{ id: string }>();
+  const { confirm, prompt } = useConfirm();
   const [order, setOrder] = useState<Order | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -173,7 +175,7 @@ export default function OrderSummaryPage() {
   }
 
   async function removePayment(paymentId: string) {
-    if (!confirm("Remove this payment record?")) return;
+    if (!(await confirm({ title: "Remove payment?", message: "This deletes the payment record and updates the balance due.", confirmLabel: "Remove", tone: "danger" }))) return;
     try { await api(`/api/orders/${id}/payments/${paymentId}`, { method: "DELETE" }); toast("Payment removed."); await reloadPayments(); }
     catch (caught) { toast((caught as Error).message, "error"); }
   }
@@ -206,7 +208,12 @@ export default function OrderSummaryPage() {
   }
 
   async function consumeMaterial(material: Material) {
-    const input = prompt(`Consume how much ${material.name}? Remaining allocated: ${material.remainingQty} ${material.unit}`, String(material.remainingQty));
+    const input = await prompt({
+      title: `Consume ${material.name}`,
+      message: `Remaining allocated: ${material.remainingQty} ${material.unit}.`,
+      input: { label: `Quantity (${material.unit})`, type: "number", defaultValue: String(material.remainingQty), placeholder: String(material.remainingQty) },
+      confirmLabel: "Record consumption",
+    });
     if (input === null) return;
     const quantity = Number(input);
     if (!Number.isFinite(quantity) || quantity <= 0) { toast("Enter a valid quantity.", "error"); return; }
@@ -215,7 +222,7 @@ export default function OrderSummaryPage() {
   }
 
   async function removeMaterial(material: Material) {
-    if (!confirm(`Remove the allocation of ${material.name}?`)) return;
+    if (!(await confirm({ title: "Remove allocation?", message: `This releases the reserved ${material.name} back to available stock.`, confirmLabel: "Remove", tone: "danger" }))) return;
     try { await api(`/api/orders/${id}/materials/${material.id}`, { method: "DELETE" }); toast("Allocation removed."); await reloadMaterials(); }
     catch (caught) { toast((caught as Error).message, "error"); }
   }

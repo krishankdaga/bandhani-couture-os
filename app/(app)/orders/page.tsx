@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { api, money, shortDate, toast } from "@/lib/client";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type Order = { id: string; orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string; customer: { name: string; phone: string }; stylist: { name: string }; stages: Array<{ status: string }> };
 type Meta = { stores: Array<{ id: string; name: string }>; users: Array<{ id: string; name: string; role: string }>; customers: Customer[] };
@@ -31,6 +32,7 @@ export default function OrdersPage() {
   const [requestingDelete, setRequestingDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [customMeasurements, setCustomMeasurements] = useState<CustomMeasurement[]>([]);
+  const { confirm } = useConfirm();
 
   // Customer combobox
   const [custSearch, setCustSearch] = useState("");
@@ -178,7 +180,7 @@ export default function OrdersPage() {
   }
 
   async function requestDelete(order: Order) {
-    if (!confirm(`Send a deletion request for ${order.orderNumber} to the owner?`)) return;
+    if (!(await confirm({ title: "Request deletion?", message: `The owner will be asked to approve deleting ${order.orderNumber}.`, confirmLabel: "Send request" }))) return;
     setRequestingDelete(order.id);
     try {
       await api(`/api/orders/${order.id}/request-delete`, { method: "POST" });
@@ -187,7 +189,7 @@ export default function OrdersPage() {
   }
 
   async function deleteOrder(order: Order) {
-    if (!confirm(`Permanently delete ${order.orderNumber}? This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete ${order.orderNumber}?`, message: "This permanently removes the order and all its payments, materials and production stages. This cannot be undone.", confirmLabel: "Delete order", tone: "danger" }))) return;
     setDeletingId(order.id);
     try {
       await api(`/api/orders/${order.id}`, { method: "DELETE" });

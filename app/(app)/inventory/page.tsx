@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Download } from "lucide-react";
 import { api, money, toast } from "@/lib/client";
+import { useConfirm } from "@/components/confirm-dialog";
 
 const categories = ["FABRIC", "FINISHED_GOOD", "ACCESSORY", "PACKAGING", "OTHER"];
 const UNITS = ["metres", "yards", "pcs", "rolls", "kg", "grams", "litres", "sets", "pairs"];
 
 export default function InventoryPage() {
+  const { confirm } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [movementItemId, setMovementItemId] = useState<string | null>(null);
@@ -108,7 +110,7 @@ export default function InventoryPage() {
   }
 
   async function deleteItem(id: string) {
-    if (!confirm("Delete this inventory item?")) return;
+    if (!(await confirm({ title: "Delete inventory item?", message: "This permanently removes the item and its stock record. This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
 
     await api(`/api/inventory/${id}`, {
       method: "DELETE",

@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { UserRoundPlus } from "lucide-react";
 import { api, money, shortDate } from "@/lib/client";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type Lead = { id: string; name: string; phone: string; source: string; status: string; budget: string | null; followUpDate: string | null; store: { name: string }; stylist: { name: string } | null; customer: { id: string } | null };
 type Meta = { stores: Array<{ id: string; name: string }>; users: Array<{ id: string; name: string; role: string; storeId: string | null }> };
@@ -14,10 +15,11 @@ type Session = { user: { permissions: string[] } };
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]); const [meta, setMeta] = useState<Meta>({ stores: [], users: [] });
   const [showForm, setShowForm] = useState(false); const [error, setError] = useState(""); const [pageError, setPageError] = useState(""); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [convertingId, setConvertingId] = useState(""); const [permissions, setPermissions] = useState<string[]>([]);
+  const { confirm } = useConfirm();
   const load = useCallback(async () => { setLoading(true); setPageError(""); try { const [leadResult, metaResult, session] = await Promise.all([api<{ leads: Lead[] }>("/api/leads"), api<Meta>("/api/meta"), api<Session>("/api/auth/me")]); setLeads(leadResult.leads); setMeta(metaResult); setPermissions(session.user.permissions); } catch (e) { setPageError((e as Error).message); } finally { setLoading(false); } }, []);
   useEffect(() => { load(); }, [load]);
   async function create(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError(""); setSaving(true); const form = new FormData(event.currentTarget); try { await api("/api/leads", { method: "POST", body: JSON.stringify({ ...Object.fromEntries(form), budget: form.get("budget") || null, stylistId: form.get("stylistId") || null, eventDate: form.get("eventDate") || null, followUpDate: form.get("followUpDate") || null, preferences: String(form.get("preferences") || "").split(",").map((v) => v.trim()).filter(Boolean) }) }); setShowForm(false); await load(); } catch (e) { setError((e as Error).message); } finally { setSaving(false); } }
-  async function convert(id: string) { if (!confirm("Convert this lead into a customer?")) return; setConvertingId(id); setPageError(""); try { await api(`/api/leads/${id}/convert`, { method: "POST" }); await load(); } catch (e) { setPageError((e as Error).message); } finally { setConvertingId(""); } }
+  async function convert(id: string) { if (!(await confirm({ title: "Convert to customer?", message: "This creates a customer record from the lead so you can take orders.", confirmLabel: "Convert" }))) return; setConvertingId(id); setPageError(""); try { await api(`/api/leads/${id}/convert`, { method: "POST" }); await load(); } catch (e) { setPageError((e as Error).message); } finally { setConvertingId(""); } }
   const canCreate = permissions.includes("leads.create");
   const canConvert = permissions.includes("leads.convert");
   return <><PageHeader title="Lead Management" description="Capture, assign and follow up every enquiry." action={canCreate ? <button className="btn-primary" onClick={() => setShowForm(!showForm)}>+ New lead</button> : undefined} />

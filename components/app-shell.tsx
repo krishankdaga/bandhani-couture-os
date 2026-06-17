@@ -11,6 +11,7 @@ import { GlobalSearch } from "@/components/global-search";
 import { NotificationCenter } from "@/components/notification-center";
 import { CbosAssistant } from "@/components/cbos-assistant";
 import { ToastViewport } from "@/components/toast-viewport";
+import { ConfirmProvider, useConfirm } from "@/components/confirm-dialog";
 
 type ShellUser = { name: string; email: string; image: string | null; role: string; companyStatus: string; companyRoleName: string | null; permissions: string[] };
 
@@ -19,6 +20,15 @@ function initials(name: string) {
 }
 
 export function AppShell({ user, children }: { user: ShellUser; children: React.ReactNode }) {
+  return (
+    <ConfirmProvider>
+      <AppShellInner user={user}>{children}</AppShellInner>
+    </ConfirmProvider>
+  );
+}
+
+function AppShellInner({ user, children }: { user: ShellUser; children: React.ReactNode }) {
+  const { confirm } = useConfirm();
   const pathname = usePathname();
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -50,7 +60,7 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   }, []);
 
   async function logout() {
-    if (!window.confirm("Sign out of Couture OS?")) return;
+    if (!(await confirm({ title: "Sign out?", message: "You'll need to sign in again to get back into Couture OS.", confirmLabel: "Sign out" }))) return;
     setLoggingOut(true);
     try { await fetch("/api/auth/logout", { method: "POST" }); }
     finally { router.push("/login"); router.refresh(); }
