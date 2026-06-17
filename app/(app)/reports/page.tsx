@@ -22,6 +22,8 @@ type EmployeeRow = { id: string; name: string; email: string; role: string; comp
 
 const EMPLOYEE_ROLES = ["OWNER", "PARTNER", "STORE_MANAGER", "STYLIST", "PRODUCTION_MANAGER", "QC_TEAM", "INVENTORY_TEAM", "PURCHASE_TEAM", "ACCOUNTS_TEAM"];
 
+type TabId = "overview" | "sales" | "leads" | "stores" | "inventory" | "team";
+
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 // Shared querystring for both data loads and the export links, so the CSV a user
@@ -56,6 +58,8 @@ export default function ReportsPage() {
   const [empRole, setEmpRole] = useState("all");
   const [empSearch, setEmpSearch] = useState("");
   const [empSearchDebounced, setEmpSearchDebounced] = useState("");
+  // Section sub-nav so the page isn't a single long scroll of dense tables.
+  const [tab, setTab] = useState<TabId>("overview");
 
   // Only owners may pick a store; managers/employees are pinned to their own
   // store server-side, so the control is hidden for them.
@@ -146,6 +150,18 @@ export default function ReportsPage() {
   const segClass = (active: boolean) =>
     `rounded-md px-3 py-1.5 text-xs font-semibold transition ${active ? "bg-white text-ink shadow-sm" : "text-stone-500 hover:text-ink"}`;
 
+  const showStores = !!comparison && comparison.length > 0;
+  const tabs: Array<{ id: TabId; label: string }> = [
+    { id: "overview", label: "Overview" },
+    { id: "sales", label: "Sales" },
+    { id: "leads", label: "Leads" },
+    ...(showStores ? [{ id: "stores" as TabId, label: "Stores" }] : []),
+    { id: "inventory", label: "Inventory" },
+    { id: "team", label: "Team" },
+  ];
+  // If the active tab disappears (e.g. store filter hides the Stores tab), fall back to Overview.
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : "overview";
+
   return (
     <>
       <PageHeader eyebrow="Business intelligence" title="Reports & Analytics" description="Sales trends, lead conversion, and team performance across CRM, orders, production, stock and finance." action={exportLinks.length > 0 && (
@@ -190,13 +206,32 @@ export default function ReportsPage() {
         <p className="mt-3 text-xs text-stone-400">Filters apply to the snapshot tiles and analytics below. Inventory tiles always reflect current stock.</p>
       </div>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([label, value]) => (
-          <div key={label} className="card p-5"><span className="hairline-gold mb-3" /><p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">{label}</p><p className="numeral mt-2 text-3xl text-ink">{value}</p></div>
+      <nav className="mb-6 flex flex-wrap gap-1 border-b border-stone-200" role="tablist" aria-label="Report sections">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+              activeTab === t.id ? "border-wine text-ink" : "border-transparent text-stone-500 hover:text-ink"
+            }`}
+          >
+            {t.label}
+          </button>
         ))}
-      </div>
+      </nav>
 
-      {comparison && comparison.length > 0 && (
+      {activeTab === "overview" && (
+        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {cards.map(([label, value]) => (
+            <div key={label} className="card p-5"><span className="hairline-gold mb-3" /><p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">{label}</p><p className="numeral mt-2 text-3xl text-ink">{value}</p></div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === "stores" && showStores && (
         <section className="card mb-6 p-5">
           <h2 className="font-semibold">Store comparison</h2>
           <p className="text-xs text-stone-500">Key metrics per store for the selected date range. Low stock reflects current inventory.</p>
@@ -219,9 +254,9 @@ export default function ReportsPage() {
         </section>
       )}
 
-      {loading ? <LoadingState label="Crunching analytics..." rows={3} /> : analytics && <>
+      {(activeTab === "sales" || activeTab === "leads" || activeTab === "inventory") && (loading ? <LoadingState label="Crunching analytics..." rows={3} /> : analytics && <>
         {/* Sales */}
-        <section className="card mb-5 p-5">
+        {activeTab === "sales" && <section className="card mb-5 p-5">
           <h2 className="font-semibold">Sales</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div><p className="text-xs text-stone-400">Revenue booked</p><p className="mt-1 numeral text-2xl">{money(analytics.sales.totalRevenue)}</p></div>
@@ -241,10 +276,10 @@ export default function ReportsPage() {
               ))}
             </div>
           )}
-        </section>
+        </section>}
 
         {/* Lead conversion */}
-        <section className="card mb-5 p-5">
+        {activeTab === "leads" && <section className="card mb-5 p-5">
           <h2 className="font-semibold">Lead conversion</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <div><p className="text-xs text-stone-400">Leads in range</p><p className="mt-1 numeral text-2xl">{analytics.leads.total}</p></div>
@@ -256,21 +291,21 @@ export default function ReportsPage() {
               {analytics.leads.bySource.map((s) => <tr key={s.source}><td>{s.source.replaceAll("_", " ")}</td><td>{s.total}</td><td>{s.converted}</td><td>{s.rate}%</td></tr>)}
             </tbody></table></div>
           )}
-        </section>
+        </section>}
 
         {/* Inventory valuation */}
-        <section className="card p-5">
+        {activeTab === "inventory" && <section className="card p-5">
           <h2 className="font-semibold">Inventory</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <div><p className="text-xs text-stone-400">Stock value (at cost)</p><p className="mt-1 numeral text-2xl">{money(analytics.inventory.stockValue)}</p></div>
             <div><p className="text-xs text-stone-400">Items tracked</p><p className="mt-1 numeral text-2xl">{analytics.inventory.itemCount}</p></div>
             <div><p className="text-xs text-stone-400">Items short</p><p className={`mt-1 numeral text-2xl ${analytics.inventory.shortageItems > 0 ? "text-amber-700" : "text-emerald-700"}`}>{analytics.inventory.shortageItems}</p></div>
           </div>
-        </section>
-      </>}
+        </section>}
+      </>)}
 
       {/* Employee performance */}
-      <section className="card mt-5 p-5">
+      {activeTab === "team" && <section className="card mt-5 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-semibold">Employee performance</h2>
@@ -317,7 +352,7 @@ export default function ReportsPage() {
             ))}
           </tbody></table></div>
         ) : <p className="mt-4 text-sm text-stone-400">No employees match these filters.</p>}
-      </section>
+      </section>}
     </>
   );
 }

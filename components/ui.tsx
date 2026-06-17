@@ -128,6 +128,41 @@ export function SegmentedControl<T extends string>({
   );
 }
 
+/** Quick-filter "saved views" — pill row with optional live counts. */
+export function QuickViews<T extends string>({
+  views,
+  value,
+  onChange,
+}: {
+  views: ReadonlyArray<{ id: T; label: string; count?: number }>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {views.map((view) => {
+        const active = value === view.id;
+        return (
+          <button
+            key={view.id}
+            type="button"
+            onClick={() => onChange(view.id)}
+            aria-pressed={active}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              active ? "border-wine bg-wine text-white" : "border-stone-200 text-stone-600 hover:border-wine/30 hover:text-wine"
+            }`}
+          >
+            {view.label}
+            {typeof view.count === "number" && (
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-stone-100 text-stone-500"}`}>{view.count}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Small labelled metric used inside cards and detail panels. */
 export function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (

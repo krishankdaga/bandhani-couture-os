@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { Drawer } from "@/components/drawer";
 import { Download } from "lucide-react";
 import { api, money, shortDate, toast } from "@/lib/client";
 
@@ -29,8 +30,11 @@ export default function PurchasesPage() {
   useEffect(() => {
     load();
   }, []);
+  // Pre-fill the search box from ?search= (global-search deep links).
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get("search"); if (q) setSearch(q); }, []);
   const filteredPurchases=useMemo(()=>purchases.filter((purchase)=>{const text=`${purchase.purchaseNo} ${purchase.vendorName} ${purchase.lines?.map((line:any)=>line.itemName).join(" ")}`.toLowerCase();const pending=purchase.status!=="RECEIVED"&&purchase.status!=="CANCELLED";const overdue=pending&&purchase.expectedDate&&new Date(purchase.expectedDate)<new Date();return text.includes(search.toLowerCase())&&(statusFilter==="ALL"||purchase.status===statusFilter)&&(receiptFilter==="ALL"||(receiptFilter==="PENDING"&&pending)||(receiptFilter==="RECEIVED"&&purchase.status==="RECEIVED"))&&(!overdueOnly||overdue);}).sort((a,b)=>sort==="EXPECTED"?new Date(a.expectedDate||"2999-01-01").getTime()-new Date(b.expectedDate||"2999-01-01").getTime():sort==="AMOUNT"?Number(b.totalAmount)-Number(a.totalAmount):new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()),[purchases,search,statusFilter,receiptFilter,overdueOnly,sort]);
   function clearFilters(){setSearch("");setStatusFilter("ALL");setReceiptFilter("ALL");setOverdueOnly(false);setSort("NEWEST");}
+  const receivingPurchase = useMemo(() => purchases.find((p) => p.id === receivingId), [purchases, receivingId]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -217,49 +221,6 @@ export default function PurchasesPage() {
                           {String(line.quantity)} {line.unit} × {money(line.rate)}
                         </span>
                       </div>
-
-                      {receivingId === purchase.id && (
-                        <div className="mt-3 grid gap-3 md:grid-cols-2">
-                          <Input
-                            label="Inventory SKU"
-                            value={receiveLines[line.id]?.sku || ""}
-                            onChange={(v) =>
-                              setReceiveLines((prev) => ({
-                                ...prev,
-                                [line.id]: {
-                                  ...prev[line.id],
-                                  sku: v,
-                                },
-                              }))
-                            }
-                          />
-
-                          <label className="block">
-                            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-                              Category
-                            </span>
-                            <select
-                              className="mt-1"
-                              value={receiveLines[line.id]?.category || "OTHER"}
-                              onChange={(e) =>
-                                setReceiveLines((prev) => ({
-                                  ...prev,
-                                  [line.id]: {
-                                    ...prev[line.id],
-                                    category: e.target.value,
-                                  },
-                                }))
-                              }
-                            >
-                              <option value="FABRIC">FABRIC</option>
-                              <option value="FINISHED_GOOD">FINISHED_GOOD</option>
-                              <option value="ACCESSORY">ACCESSORY</option>
-                              <option value="PACKAGING">PACKAGING</option>
-                              <option value="OTHER">OTHER</option>
-                            </select>
-                          </label>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -268,37 +229,16 @@ export default function PurchasesPage() {
                   <p className="mt-3 text-sm text-stone-600">{purchase.notes}</p>
                 )}
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {purchase.status !== "RECEIVED" && receivingId !== purchase.id && (
+                {purchase.status !== "RECEIVED" && (
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       onClick={() => startReceiving(purchase)}
                       className="btn-secondary btn-sm"
                     >
                       Receive stock
                     </button>
-                  )}
-
-                  {receivingId === purchase.id && (
-                    <>
-                      <button
-                        onClick={() => receivePurchase(purchase)}
-                        className="btn-primary btn-sm"
-                      >
-                        Confirm receipt
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setReceivingId(null);
-                          setReceiveLines({});
-                        }}
-                        className="btn-secondary btn-sm"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -310,6 +250,98 @@ export default function PurchasesPage() {
           </div>
         </div>
       </div>
+
+      <Drawer
+        open={!!receivingPurchase}
+        onClose={() => { setReceivingId(null); setReceiveLines({}); }}
+        title="Receive stock"
+        description={
+          receivingPurchase
+            ? `${receivingPurchase.purchaseNo} · ${receivingPurchase.vendorName}`
+            : undefined
+        }
+        footer={
+          receivingPurchase && (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setReceivingId(null); setReceiveLines({}); }}
+                className="btn-secondary btn-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => receivePurchase(receivingPurchase)}
+                className="btn-primary btn-sm"
+              >
+                Confirm receipt
+              </button>
+            </div>
+          )
+        }
+      >
+        {receivingPurchase && (
+          <div className="space-y-5">
+            <dl className="grid grid-cols-2 gap-3 rounded-xl border border-stone-100 bg-stone-50 p-4 text-sm">
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-stone-400">Expected</dt>
+                <dd className="mt-1 font-medium">{receivingPurchase.expectedDate ? shortDate(receivingPurchase.expectedDate) : "—"}</dd>
+              </div>
+              <div className="text-right">
+                <dt className="text-xs font-medium uppercase tracking-wide text-stone-400">Total</dt>
+                <dd className="mt-1 font-medium">{money(receivingPurchase.totalAmount)}</dd>
+              </div>
+            </dl>
+
+            <p className="text-sm text-stone-500">
+              Map each purchased line to an inventory SKU and category. Confirming the receipt adds the quantities to inventory.
+            </p>
+
+            <div className="space-y-4">
+              {receivingPurchase.lines?.map((line: any) => (
+                <div key={line.id} className="rounded-xl border border-stone-100 p-4">
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="font-medium">{line.itemName}</span>
+                    <span className="text-stone-500">{String(line.quantity)} {line.unit} × {money(line.rate)}</span>
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <Input
+                      label="Inventory SKU"
+                      value={receiveLines[line.id]?.sku || ""}
+                      onChange={(v) =>
+                        setReceiveLines((prev) => ({
+                          ...prev,
+                          [line.id]: { ...prev[line.id], sku: v },
+                        }))
+                      }
+                    />
+                    <label className="block">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Category</span>
+                      <select
+                        className="mt-1"
+                        value={receiveLines[line.id]?.category || "OTHER"}
+                        onChange={(e) =>
+                          setReceiveLines((prev) => ({
+                            ...prev,
+                            [line.id]: { ...prev[line.id], category: e.target.value },
+                          }))
+                        }
+                      >
+                        <option value="FABRIC">FABRIC</option>
+                        <option value="FINISHED_GOOD">FINISHED_GOOD</option>
+                        <option value="ACCESSORY">ACCESSORY</option>
+                        <option value="PACKAGING">PACKAGING</option>
+                        <option value="OTHER">OTHER</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Drawer>
     </>
   );
 }

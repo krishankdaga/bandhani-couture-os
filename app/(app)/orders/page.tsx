@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, ClipboardList, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { SearchInput } from "@/components/ui";
+import { QuickViews, SearchInput } from "@/components/ui";
 import { api, money, shortDate, toast } from "@/lib/client";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -19,6 +19,19 @@ type NewCust = { name: string; phone: string; email: string; address: string; pr
 
 const PRIORITY_DOT: Record<string, string> = { NORMAL: "bg-stone-300", HIGH: "bg-amber-400", URGENT: "bg-red-500" };
 const NEW_CUST_BLANK: NewCust = { name: "", phone: "", email: "", address: "", preferences: "" };
+
+// Saved views — quick filters over existing list fields (no extra API calls).
+type OrderView = "ALL" | "ATTENTION" | "DUE_WEEK" | "IN_PROD" | "READY";
+const INACTIVE_ORDER_STATUSES = ["DELIVERED", "CANCELLED"];
+function matchesView(o: Order, view: OrderView): boolean {
+  switch (view) {
+    case "ATTENTION": return o.delayState === "RED" || o.delayState === "YELLOW";
+    case "DUE_WEEK": return !INACTIVE_ORDER_STATUSES.includes(o.status) && new Date(o.deliveryDate).getTime() <= Date.now() + 7 * 86400000;
+    case "IN_PROD": return o.status === "IN_PRODUCTION";
+    case "READY": return o.status === "READY";
+    default: return true;
+  }
+}
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -40,6 +53,7 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [delayFilter, setDelayFilter] = useState("ALL");
+  const [view, setView] = useState<OrderView>("ALL");
 
   // Customer combobox
   const [custSearch, setCustSearch] = useState("");
@@ -73,6 +87,9 @@ export default function OrdersPage() {
     } catch (e) { setPageError((e as Error).message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Pre-fill the search box from ?search= so global-search and assistant deep links land filtered.
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get("search"); if (q) setSearch(q); }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -213,13 +230,21 @@ export default function OrdersPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return orders.filter((o) =>
+      matchesView(o, view) &&
       (statusFilter === "ALL" || o.status === statusFilter) &&
       (delayFilter === "ALL" || o.delayState === delayFilter) &&
       (!q || `${o.orderNumber} ${o.customer.name} ${o.customer.phone} ${o.stylist.name}`.toLowerCase().includes(q)),
     );
-  }, [orders, search, statusFilter, delayFilter]);
-  const filtersActive = search.trim() !== "" || statusFilter !== "ALL" || delayFilter !== "ALL";
-  function clearFilters() { setSearch(""); setStatusFilter("ALL"); setDelayFilter("ALL"); }
+  }, [orders, search, statusFilter, delayFilter, view]);
+  const orderViews = useMemo(() => ([
+    { id: "ALL" as OrderView, label: "All orders", count: orders.length },
+    { id: "ATTENTION" as OrderView, label: "Needs attention", count: orders.filter((o) => matchesView(o, "ATTENTION")).length },
+    { id: "DUE_WEEK" as OrderView, label: "Due this week", count: orders.filter((o) => matchesView(o, "DUE_WEEK")).length },
+    { id: "IN_PROD" as OrderView, label: "In production", count: orders.filter((o) => matchesView(o, "IN_PROD")).length },
+    { id: "READY" as OrderView, label: "Ready", count: orders.filter((o) => matchesView(o, "READY")).length },
+  ]), [orders]);
+  const filtersActive = search.trim() !== "" || statusFilter !== "ALL" || delayFilter !== "ALL" || view !== "ALL";
+  function clearFilters() { setSearch(""); setStatusFilter("ALL"); setDelayFilter("ALL"); setView("ALL"); }
   function resetCreateForm() {
     setShow(false);
     setSelectedCustId(""); setCustSearch(""); setShowCustDrop(false);
@@ -443,6 +468,7 @@ export default function OrdersPage() {
 
       {!loading && orders.length > 0 && (
         <section className="card mb-6 p-4">
+          <div className="mb-3"><QuickViews views={orderViews} value={view} onChange={setView} /></div>
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center">
             <SearchInput value={search} onChange={setSearch} placeholder="Search order, customer, phone or stylist" />
             <select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>

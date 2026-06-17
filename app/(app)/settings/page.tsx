@@ -6,7 +6,22 @@ import { Building2, Camera, ChevronDown, ChevronUp, KeyRound, MapPin, Pencil, Pl
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, InlineMessage, LoadingState } from "@/components/async-state";
 import { Hint } from "@/components/ui";
-import { api, toast } from "@/lib/client";
+import { api, money, toast } from "@/lib/client";
+
+// Named business-profile fields backed by the generic key/value settings store —
+// owners edit recognisable fields instead of raw config keys.
+const BUSINESS_FIELDS: Array<{ key: string; label: string; placeholder?: string; type?: "text" | "tel" | "email" | "url" | "textarea"; hint?: string }> = [
+  { key: "business_name", label: "Business name", placeholder: "Bandhani & Siddhartha Daga", hint: "Shown across the workspace and on documents." },
+  { key: "legal_name", label: "Legal / registered name", placeholder: "Siddhartha Daga Couture Pvt. Ltd." },
+  { key: "gst_number", label: "GSTIN", placeholder: "24ABCDE1234F1Z5" },
+  { key: "contact_phone", label: "Contact phone", placeholder: "+91 98765 43210", type: "tel" },
+  { key: "contact_email", label: "Contact email", placeholder: "atelier@bandhaniindia.com", type: "email" },
+  { key: "website", label: "Website", placeholder: "https://bandhaniindia.com", type: "url" },
+  { key: "invoice_prefix", label: "Invoice number prefix", placeholder: "SDC-", hint: "Prepended to generated invoice numbers." },
+  { key: "address", label: "Registered address", placeholder: "Atelier address for invoices", type: "textarea" },
+  { key: "invoice_terms", label: "Invoice footer / terms", placeholder: "Payment terms, return policy, thank-you note…", type: "textarea" },
+];
+const BUSINESS_KEYS = new Set(BUSINESS_FIELDS.map((f) => f.key));
 
 type Me = { id: string; name: string; email: string; image: string | null; companyStatus: string; permissions: string[] };
 type Setting = { id: string; key: string; value: unknown };
@@ -60,8 +75,7 @@ export default function SettingsPage() {
   const [savingPwd, setSavingPwd] = useState(false);
   const [pwdError, setPwdError] = useState("");
 
-  const [key, setKey] = useState("business_name");
-  const [value, setValue] = useState("");
+  const [biz, setBiz] = useState<Record<string, string>>({});
   const [savingSetting, setSavingSetting] = useState(false);
 
   const [storeForm, setStoreForm] = useState({ name: "", code: "", location: "" });
@@ -93,7 +107,11 @@ export default function SettingsPage() {
           api<{ settings: Setting[] }>("/api/settings"),
           api<{ stores: StoreRecord[] }>("/api/stores"),
         ]);
-        setSettings(settingsData.settings || []);
+        const loaded = settingsData.settings || [];
+        setSettings(loaded);
+        const map: Record<string, string> = {};
+        loaded.forEach((s) => { map[s.key] = typeof s.value === "string" ? s.value : JSON.stringify(s.value); });
+        setBiz(map);
         setStores(storesData.stores || []);
       } catch {
         setSettings([]);
@@ -146,13 +164,17 @@ export default function SettingsPage() {
     }
   }
 
-  async function saveSetting(event: React.FormEvent) {
+  async function saveBusinessProfile(event: React.FormEvent) {
     event.preventDefault();
     setSavingSetting(true);
     try {
-      await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value }) });
-      toast("Setting saved.");
-      setValue("");
+      // Upsert each named field through the same key/value endpoint.
+      await Promise.all(
+        BUSINESS_FIELDS.map((field) =>
+          api("/api/settings", { method: "POST", body: JSON.stringify({ key: field.key, value: (biz[field.key] ?? "").trim() }) }),
+        ),
+      );
+      toast("Business profile saved.");
       await load();
     } catch (caught) {
       toast((caught as Error).message, "error");
@@ -357,9 +379,9 @@ export default function SettingsPage() {
                                 ["Total orders", storeDetail.performance.totalOrders],
                                 ["Active orders", storeDetail.performance.activeOrders],
                                 ["Delivered", storeDetail.performance.deliveredOrders],
-                                ["Revenue", `₹${Number(storeDetail.performance.totalRevenue).toLocaleString("en-IN")}`],
-                                ["Collected", `₹${Number(storeDetail.performance.totalCollected).toLocaleString("en-IN")}`],
-                                ["Outstanding", `₹${Number(storeDetail.performance.outstanding).toLocaleString("en-IN")}`],
+                                ["Revenue", money(storeDetail.performance.totalRevenue)],
+                                ["Collected", money(storeDetail.performance.totalCollected)],
+                                ["Outstanding", money(storeDetail.performance.outstanding)],
                               ].map(([label, val]) => (
                                 <div key={String(label)} className="rounded-xl bg-stone-50 p-3">
                                   <p className="text-[10px] uppercase tracking-wide text-stone-400">{label}</p>
@@ -395,32 +417,59 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Business settings (owner / settings.edit) */}
+        {/* Business profile (owner / settings.edit) */}
         {canEditBusiness && (
           <div className="xl:col-span-2">
             <div className="mb-4 flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-wine/10 text-wine"><Building2 size={20} /></span>
-              <div><h2 className="font-semibold">Business settings</h2><p className="text-xs text-stone-500">Key/value configuration for Bandhani / Siddhartha Daga</p></div>
+              <div><h2 className="font-semibold">Business profile</h2><p className="text-xs text-stone-500">Identity and contact details for Bandhani / Siddhartha Daga</p></div>
             </div>
-            <Hint title="What is this">Store business-wide configuration as key/value pairs (for example <code>business_name</code> or <code>gst_number</code>). These are shared across the whole workspace.</Hint>
-            <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
-              <form onSubmit={saveSetting} className="card space-y-4 p-5">
-                <div><label>Key</label><input value={key} onChange={(e) => setKey(e.target.value)} placeholder="business_name" required minLength={2} /></div>
-                <div><label>Value</label><input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Bandhani & Siddhartha Daga" /></div>
-                <button disabled={savingSetting} className="btn-primary w-full">{savingSetting ? "Saving..." : "Save setting"}</button>
-              </form>
-              <div className="card divide-y divide-stone-100 overflow-hidden">
-                <div className="border-b border-stone-100 p-4"><h3 className="section-title">Saved settings</h3><p className="text-xs text-stone-500">{settings.length} configured</p></div>
-                {settings.length
-                  ? settings.map((s) => (
-                      <button key={s.id} type="button" onClick={() => { setKey(s.key); setValue(typeof s.value === "string" ? s.value : JSON.stringify(s.value)); }} className="block w-full p-4 text-left hover:bg-stone-50">
-                        <p className="font-mono text-xs font-semibold text-stone-500">{s.key}</p>
-                        <p className="mt-1 text-sm">{typeof s.value === "string" ? s.value : JSON.stringify(s.value)}</p>
-                      </button>
-                    ))
-                  : <div className="p-4"><EmptyState message="No business settings yet. Add the first one on the left." /></div>}
+            <Hint title="What is this">These details identify your atelier across the workspace and on documents like invoices. They&apos;re shared with everyone on your team.</Hint>
+            <form onSubmit={saveBusinessProfile} className="card p-5 md:p-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                {BUSINESS_FIELDS.map((field) => (
+                  <div key={field.key} className={field.type === "textarea" ? "md:col-span-2" : ""}>
+                    <label htmlFor={`biz-${field.key}`}>{field.label}</label>
+                    {field.type === "textarea" ? (
+                      <textarea
+                        id={`biz-${field.key}`}
+                        rows={3}
+                        value={biz[field.key] ?? ""}
+                        placeholder={field.placeholder}
+                        onChange={(e) => setBiz((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      />
+                    ) : (
+                      <input
+                        id={`biz-${field.key}`}
+                        type={field.type ?? "text"}
+                        value={biz[field.key] ?? ""}
+                        placeholder={field.placeholder}
+                        onChange={(e) => setBiz((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      />
+                    )}
+                    {field.hint && <p className="mt-1 text-xs normal-case tracking-normal text-stone-400">{field.hint}</p>}
+                  </div>
+                ))}
               </div>
-            </div>
+              <div className="mt-5 flex justify-end"><button disabled={savingSetting} className="btn-primary flex items-center gap-2"><Save size={16} />{savingSetting ? "Saving..." : "Save business profile"}</button></div>
+            </form>
+
+            {/* Any custom keys not surfaced as named fields stay visible (read-only) so nothing is lost. */}
+            {(() => {
+              const other = settings.filter((s) => !BUSINESS_KEYS.has(s.key));
+              if (other.length === 0) return null;
+              return (
+                <div className="card mt-4 divide-y divide-stone-100 overflow-hidden">
+                  <div className="border-b border-stone-100 p-4"><h3 className="section-title">Other configuration</h3><p className="text-xs text-stone-500">{other.length} advanced key/value {other.length === 1 ? "entry" : "entries"}</p></div>
+                  {other.map((s) => (
+                    <div key={s.id} className="p-4">
+                      <p className="font-mono text-xs font-semibold text-stone-500">{s.key}</p>
+                      <p className="mt-1 text-sm">{typeof s.value === "string" ? s.value : JSON.stringify(s.value)}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

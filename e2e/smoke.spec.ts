@@ -35,7 +35,8 @@ test.describe("Owner", () => {
     await expect(storeSelect).toBeVisible();
     await page.getByRole("button", { name: "30d" }).click();
 
-    // Employee performance section + a profile link.
+    // Employee performance section (behind the Team sub-nav tab) + a profile link.
+    await page.getByRole("tab", { name: "Team" }).click();
     await expect(page.getByRole("heading", { name: "Employee performance" })).toBeVisible();
     const profileLink = page.locator('a[href^="/employees/"]').first();
     await expect(profileLink).toBeVisible();
@@ -87,6 +88,7 @@ test.describe("Manager", () => {
     await navLink(page, "Reports").click();
     await expect(page.getByRole("heading", { name: "Reports & Analytics" })).toBeVisible();
     await expect(page.locator("select", { hasText: "All Stores" })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Team" }).click();
     await expect(page.getByRole("heading", { name: "Employee performance" })).toBeVisible();
   });
 
@@ -181,11 +183,13 @@ test.describe.serial("Core workflows", () => {
     await page.getByRole("button", { name: "Add Purchase" }).click();
     await expect(page.getByText(`Smoke Vendor ${tag}`).first()).toBeVisible();
 
-    // Receive the purchase into inventory — scoped to this purchase's card so we
-    // don't touch other purchases or the hidden status-filter options.
+    // Receive the purchase into inventory. The "Receive stock" button is scoped
+    // to this purchase's card; confirming happens in the shared drawer (a dialog
+    // portaled to the body, so it's matched at the page/dialog level).
     const card = page.locator("div.p-5").filter({ hasText: `Smoke Vendor ${tag}` });
-    await card.getByRole("button", { name: "Receive stock" }).click(); // start receiving
-    await card.getByRole("button", { name: "Confirm receipt" }).click(); // submit
+    await card.getByRole("button", { name: "Receive stock" }).click(); // opens drawer
+    const drawer = page.getByRole("dialog", { name: "Receive stock" });
+    await drawer.getByRole("button", { name: "Confirm receipt" }).click(); // submit
     await expect(card.getByText(/Received/)).toBeVisible();
   });
 

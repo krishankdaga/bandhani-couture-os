@@ -5,6 +5,7 @@ import { AlertCircle, Check, ChevronRight, Clock3, Factory, UserRound } from "lu
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { QuickViews } from "@/components/ui";
 import { api, shortDate } from "@/lib/client";
 
 type Pardon = { id: string; status: string; reason: string; requestedBy: { name: string } };
@@ -30,6 +31,22 @@ const statusOptions = [
 ];
 // Delay states are stored as colours internally but always shown by their meaning.
 const delayLabels: Record<string, string> = { GREEN: "On track", YELLOW: "At risk", RED: "Delayed" };
+
+// Saved views — quick presets over the existing delay/status/due filters.
+type PView = "ALL" | "DELAYED" | "AT_RISK" | "DUE_WEEK" | "OVERDUE" | "BLOCKED" | "";
+function stageMatchesView(stage: Stage, view: PView): boolean {
+  const due = new Date(stage.dueDate);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const week = new Date(today); week.setDate(week.getDate() + 7);
+  switch (view) {
+    case "DELAYED": return stage.delayState === "RED";
+    case "AT_RISK": return stage.delayState === "YELLOW";
+    case "DUE_WEEK": return due >= today && due <= week;
+    case "OVERDUE": return due < today && stage.status !== "COMPLETED";
+    case "BLOCKED": return stage.status === "BLOCKED";
+    default: return true;
+  }
+}
 
 export default function ProductionPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -79,6 +96,32 @@ export default function ProductionPage() {
   const canEdit = sessionUser?.permissions.includes("production.edit") ?? false;
   const canRecalculate = canEdit;
   function clearFilters(){setSearch("");setDelayFilter("ALL");setStatusFilter("ALL");setDueFilter("ALL");}
+
+  // Quick views drive the existing select filters so the chip state and the
+  // dropdowns always agree. Counts reflect orders with a matching stage.
+  const noSelectFilters = delayFilter === "ALL" && statusFilter === "ALL" && dueFilter === "ALL";
+  const activeView: PView =
+    noSelectFilters ? "ALL" :
+    delayFilter === "RED" && statusFilter === "ALL" && dueFilter === "ALL" ? "DELAYED" :
+    delayFilter === "YELLOW" && statusFilter === "ALL" && dueFilter === "ALL" ? "AT_RISK" :
+    dueFilter === "WEEK" && delayFilter === "ALL" && statusFilter === "ALL" ? "DUE_WEEK" :
+    dueFilter === "OVERDUE" && delayFilter === "ALL" && statusFilter === "ALL" ? "OVERDUE" :
+    statusFilter === "BLOCKED" && delayFilter === "ALL" && dueFilter === "ALL" ? "BLOCKED" : "";
+  function applyView(v: PView) {
+    setDelayFilter(v === "DELAYED" ? "RED" : v === "AT_RISK" ? "YELLOW" : "ALL");
+    setStatusFilter(v === "BLOCKED" ? "BLOCKED" : "ALL");
+    setDueFilter(v === "DUE_WEEK" ? "WEEK" : v === "OVERDUE" ? "OVERDUE" : "ALL");
+  }
+  const countFor = (v: PView) => orders.filter((o) => o.stages.some((s) => stageMatchesView(s, v))).length;
+  const productionViews = useMemo(() => ([
+    { id: "ALL" as PView, label: "All work", count: orders.length },
+    { id: "DELAYED" as PView, label: "Delayed", count: countFor("DELAYED") },
+    { id: "AT_RISK" as PView, label: "At risk", count: countFor("AT_RISK") },
+    { id: "DUE_WEEK" as PView, label: "Due this week", count: countFor("DUE_WEEK") },
+    { id: "OVERDUE" as PView, label: "Overdue", count: countFor("OVERDUE") },
+    { id: "BLOCKED" as PView, label: "Blocked", count: countFor("BLOCKED") },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ]), [orders]);
 
   function chooseCustomer(nextCustomerId: string) {
     setCustomerId(nextCustomerId); setOrderId(""); setStageId(""); setError(""); setSuccess("");
@@ -163,7 +206,7 @@ export default function ProductionPage() {
       action={canRecalculate ? <button disabled={recalculating} className="btn-secondary" onClick={recalculate}>{recalculating ? "Checking..." : "Check delays"}</button> : undefined}
     />
 
-    <section className="card mb-6 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find production work</h2><p className="text-xs text-stone-500">Search orders, customers, stages, assigned team members, or vendors.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Order, customer, stage or owner"/><select value={delayFilter} onChange={(e)=>setDelayFilter(e.target.value)}><option value="ALL">All delivery health</option><option value="GREEN">On track</option><option value="YELLOW">At risk</option><option value="RED">Delayed</option></select><select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="ALL">All stage statuses</option>{statusOptions.map((item)=><option key={item.value} value={item.value}>{item.label}</option>)}</select><select value={dueFilter} onChange={(e)=>setDueFilter(e.target.value)}><option value="ALL">Any due date</option><option value="TODAY">Due today</option><option value="OVERDUE">Overdue</option><option value="WEEK">Due this week</option></select></div><p className="mt-3 text-xs text-stone-500">{filteredOrders.length} active order{filteredOrders.length===1?"":"s"} match these filters. Delay state shows whether work is on track, at risk, or late.</p></section>
+    <section className="card mb-6 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find production work</h2><p className="text-xs text-stone-500">Search orders, customers, stages, assigned team members, or vendors.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="mb-3"><QuickViews views={productionViews} value={activeView} onChange={applyView} /></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Order, customer, stage or owner"/><select value={delayFilter} onChange={(e)=>setDelayFilter(e.target.value)}><option value="ALL">All delivery health</option><option value="GREEN">On track</option><option value="YELLOW">At risk</option><option value="RED">Delayed</option></select><select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="ALL">All stage statuses</option>{statusOptions.map((item)=><option key={item.value} value={item.value}>{item.label}</option>)}</select><select value={dueFilter} onChange={(e)=>setDueFilter(e.target.value)}><option value="ALL">Any due date</option><option value="TODAY">Due today</option><option value="OVERDUE">Overdue</option><option value="WEEK">Due this week</option></select></div><p className="mt-3 text-xs text-stone-500">{filteredOrders.length} active order{filteredOrders.length===1?"":"s"} match these filters. Delay state shows whether work is on track, at risk, or late.</p></section>
 
     <section className="card mb-6 p-5">
       <div className="mb-5 flex items-center gap-2 text-sm text-stone-500">

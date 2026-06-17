@@ -44,6 +44,8 @@ export default function InventoryPage() {
   useEffect(() => {
     load();
   }, []);
+  // Pre-fill the search box from ?search= (global-search deep links).
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get("search"); if (q) setSearch(q); }, []);
   const filteredItems = useMemo(() => items.filter((item) => {
     const text = `${item.sku} ${item.name} ${item.category}`.toLowerCase();
     const low = item.reorderAt != null && Number(item.quantity) <= Number(item.reorderAt);

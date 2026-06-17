@@ -1,12 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, CornerDownLeft, Search, X } from "lucide-react";
 import { api } from "@/lib/client";
 type Result = { id: string; title: string; subtitle: string; href: string };
 export function GlobalSearch() {
+  const router = useRouter();
   const [open, setOpen] = useState(false), [query, setQuery] = useState(""), [groups, setGroups] = useState<Record<string, Result[]>>({}), [loading, setLoading] = useState(false), [error, setError] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Flat, ordered list across groups so arrow keys move through every result.
+  const flat = Object.entries(groups).flatMap(([label, items]) => items.map((item) => ({ ...item, label })));
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -29,6 +34,19 @@ export function GlobalSearch() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query]);
 
+  // Keep the highlighted result in range as results change.
+  useEffect(() => { setActiveIndex(0); }, [groups]);
+
+  function onInputKey(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!flat.length) return;
+    if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((i) => (i + 1) % flat.length); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((i) => (i - 1 + flat.length) % flat.length); }
+    else if (event.key === "Enter") {
+      const target = flat[activeIndex];
+      if (target) { event.preventDefault(); setOpen(false); router.push(target.href); }
+    }
+  }
+
   const total = Object.values(groups).reduce((sum, items) => sum + items.length, 0);
 
   return (
@@ -44,12 +62,12 @@ export function GlobalSearch() {
             {/* Search field */}
             <div className="flex items-center gap-3 border-b border-stone-100 px-4">
               <Search size={18} className="shrink-0 text-stone-400" />
-              <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} className="flex-1 border-0 bg-transparent px-0 py-4 text-[15px] text-ink placeholder:text-stone-400 focus:outline-none focus:ring-0" placeholder="Search customers, leads, orders, inventory…" />
+              <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={onInputKey} role="combobox" aria-expanded={total > 0} aria-controls="global-search-results" aria-activedescendant={flat[activeIndex] ? `gs-${flat[activeIndex].label}-${flat[activeIndex].id}` : undefined} className="flex-1 border-0 bg-transparent px-0 py-4 text-[15px] text-ink placeholder:text-stone-400 focus:outline-none focus:ring-0" placeholder="Search customers, leads, orders, inventory…" />
               <button aria-label="Close search" onClick={() => setOpen(false)} className="shrink-0 rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-ink"><X size={16} /></button>
             </div>
 
             {/* Results */}
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div id="global-search-results" role="listbox" className="max-h-[60vh] overflow-y-auto">
               {query.trim().length < 2 && (
                 <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
                   <span className="grid h-11 w-11 place-items-center rounded-full bg-stone-100 text-stone-400"><Search size={20} /></span>
@@ -68,15 +86,29 @@ export function GlobalSearch() {
               {!loading && Object.entries(groups).map(([label, items]) => items.length ? (
                 <section key={label} className="px-2 pb-2 pt-1">
                   <h3 className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.18em] text-stone-400">{label}</h3>
-                  {items.map((item) => (
-                    <Link key={`${label}-${item.id}`} href={item.href} onClick={() => setOpen(false)} className="group flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-stone-50">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-ink">{item.title}</p>
-                        <p className="mt-0.5 truncate text-xs text-stone-500">{item.subtitle}</p>
-                      </div>
-                      <ArrowRight size={15} className="shrink-0 text-stone-300 transition group-hover:translate-x-0.5 group-hover:text-accent-deep" />
-                    </Link>
-                  ))}
+                  {items.map((item) => {
+                    const index = flat.findIndex((f) => f.label === label && f.id === item.id);
+                    const active = index === activeIndex;
+                    return (
+                      <Link
+                        key={`${label}-${item.id}`}
+                        id={`gs-${label}-${item.id}`}
+                        href={item.href}
+                        role="option"
+                        aria-selected={active}
+                        ref={(el) => { if (active) el?.scrollIntoView({ block: "nearest" }); }}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        onClick={() => setOpen(false)}
+                        className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 ${active ? "bg-stone-100" : "hover:bg-stone-50"}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-ink">{item.title}</p>
+                          <p className="mt-0.5 truncate text-xs text-stone-500">{item.subtitle}</p>
+                        </div>
+                        <ArrowRight size={15} className={`shrink-0 transition group-hover:translate-x-0.5 ${active ? "text-accent-deep" : "text-stone-300 group-hover:text-accent-deep"}`} />
+                      </Link>
+                    );
+                  })}
                 </section>
               ) : null)}
             </div>
