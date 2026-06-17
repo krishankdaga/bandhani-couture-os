@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui";
 import { api, money, shortDate, toast } from "@/lib/client";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { useConfirm } from "@/components/confirm-dialog";
+import { Drawer } from "@/components/drawer";
 
 type Order = { id: string; orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string; customer: { name: string; phone: string }; stylist: { name: string }; stages: Array<{ status: string }> };
 type Meta = { stores: Array<{ id: string; name: string }>; users: Array<{ id: string; name: string; role: string }>; customers: Customer[] };
@@ -219,6 +220,12 @@ export default function OrdersPage() {
   }, [orders, search, statusFilter, delayFilter]);
   const filtersActive = search.trim() !== "" || statusFilter !== "ALL" || delayFilter !== "ALL";
   function clearFilters() { setSearch(""); setStatusFilter("ALL"); setDelayFilter("ALL"); }
+  function resetCreateForm() {
+    setShow(false);
+    setSelectedCustId(""); setCustSearch(""); setShowCustDrop(false);
+    setShowNewCust(false); setNewCust(NEW_CUST_BLANK); setCustError("");
+    setCustomMeasurements([]); setFormStoreId(""); setError("");
+  }
 
   return (
     <>
@@ -236,8 +243,15 @@ export default function OrdersPage() {
         ) : undefined}
       />
 
-      {show && canWrite && (
-        <form onSubmit={create} className="card mb-6 grid gap-4 p-5 md:grid-cols-4">
+      <Drawer
+        open={show && canWrite}
+        onClose={resetCreateForm}
+        title="New order"
+        description="Create a couture order, pick or add the customer, and capture measurements."
+        width="max-w-3xl"
+        footer={<div className="flex justify-end gap-2"><button type="button" disabled={saving} className="btn-secondary" onClick={resetCreateForm}>Cancel</button><button form="order-form" disabled={saving} className="btn-primary">{saving ? "Creating..." : "Create order"}</button></div>}
+      >
+        <form id="order-form" onSubmit={create} className="grid gap-4 sm:grid-cols-2">
 
           {/* ── Customer combobox ── */}
           <div ref={custDropRef} className="relative">
@@ -325,7 +339,7 @@ export default function OrdersPage() {
 
           {/* ── Quick-create customer form ── */}
           {showNewCust && canCreateCustomer && (
-            <div className="md:col-span-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
+            <div className="sm:col-span-2 rounded-xl border border-accent/30 bg-accent/5 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <UserPlus size={15} className="text-accent-deep" />
@@ -374,7 +388,7 @@ export default function OrdersPage() {
                     placeholder="City, locality"
                   />
                 </div>
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label>Preferences <span className="font-normal text-stone-400">(comma separated, optional)</span></label>
                   <input
                     value={newCust.preferences}
@@ -406,7 +420,7 @@ export default function OrdersPage() {
           )}
 
           {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label>{l}</label><input name={n} required placeholder="inches" /></div>)}
-          <div className="md:col-span-4">
+          <div className="sm:col-span-2">
             <div className="flex items-center justify-between"><label className="mb-0">Custom measurements</label><button type="button" onClick={addCustomMeasurement} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button></div>
             {customMeasurements.map((cm, i) => (
               <div key={i} className="mt-2 grid grid-cols-12 gap-2 items-end">
@@ -419,20 +433,11 @@ export default function OrdersPage() {
           </div>
           <div><label>Priority</label><select name="priority"><option>NORMAL</option><option>HIGH</option><option>URGENT</option></select></div>
           <div><label>Delivery date</label><input name="deliveryDate" type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} required /></div>
-          <div className="md:col-span-2"><label>Customisations (comma separated)</label><input name="customisations" /></div>
-          <div className="md:col-span-4"><label>Reference image URLs (comma separated)</label><input name="referenceImages" placeholder="https://example.com/reference.jpg" /></div>
-          {error && <div className="md:col-span-4"><InlineMessage message={error} /></div>}
-          <div className="flex gap-2 md:col-span-4">
-            <button disabled={saving} className="btn-primary">{saving ? "Creating..." : "Create order"}</button>
-            <button disabled={saving} type="button" className="btn-secondary" onClick={() => {
-              setShow(false);
-              setSelectedCustId(""); setCustSearch(""); setShowCustDrop(false);
-              setShowNewCust(false); setNewCust(NEW_CUST_BLANK); setCustError("");
-              setCustomMeasurements([]); setFormStoreId("");
-            }}>Cancel</button>
-          </div>
+          <div className="sm:col-span-2"><label>Customisations (comma separated)</label><input name="customisations" /></div>
+          <div className="sm:col-span-2"><label>Reference image URLs (comma separated)</label><input name="referenceImages" placeholder="https://example.com/reference.jpg" /></div>
+          {error && <div className="sm:col-span-2"><InlineMessage message={error} /></div>}
         </form>
-      )}
+      </Drawer>
 
       {pageError && <div className="mb-4"><ErrorState message={pageError} retry={load} /></div>}
 
