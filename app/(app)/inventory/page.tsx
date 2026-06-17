@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Download } from "lucide-react";
 import { api, money, toast } from "@/lib/client";
 import { useConfirm } from "@/components/confirm-dialog";
+import { Drawer } from "@/components/drawer";
 
 const categories = ["FABRIC", "FINISHED_GOOD", "ACCESSORY", "PACKAGING", "OTHER"];
 const UNITS = ["metres", "yards", "pcs", "rolls", "kg", "grams", "litres", "sets", "pairs"];
@@ -141,6 +142,8 @@ export default function InventoryPage() {
     toast("Stock movement recorded.");
   }
 
+  const movementItem = items.find((i) => i.id === movementItemId);
+
   return (
     <>
       <PageHeader
@@ -261,53 +264,6 @@ export default function InventoryPage() {
 
                   {item.notes && <p className="mt-3 text-sm text-stone-600">{item.notes}</p>}
 
-                  {movementItemId === item.id && (
-                    <form onSubmit={saveMovement} className="mt-4 rounded-xl bg-sand p-4">
-                      <div className="grid gap-3 md:grid-cols-4">
-                        <select
-                          aria-label="Movement type"
-                          value={movement.type}
-                          onChange={(e) => setMovement({ ...movement, type: e.target.value })}
-                        >
-                          <option value="IN">Stock In</option>
-                          <option value="OUT">Stock Out</option>
-                          <option value="ADJUSTMENT">Adjustment</option>
-                        </select>
-
-                        <input
-                          type="number"
-                          aria-label="Quantity"
-                          placeholder="Quantity"
-                          value={movement.quantity}
-                          onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })}
-                        />
-
-                        <input
-                          aria-label="Reason"
-                          placeholder="Reason"
-                          value={movement.reason}
-                          onChange={(e) => setMovement({ ...movement, reason: e.target.value })}
-                        />
-
-                        <input
-                          aria-label="Reference"
-                          placeholder="Reference"
-                          value={movement.reference}
-                          onChange={(e) => setMovement({ ...movement, reference: e.target.value })}
-                        />
-                      </div>
-
-                      <div className="mt-3 flex gap-2">
-                        <button className="btn-primary btn-sm">
-                          Save movement
-                        </button>
-                        <button type="button" onClick={() => setMovementItemId(null)} className="btn-secondary btn-sm">
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button onClick={() => editItem(item)} className="btn-secondary btn-sm">
                       Edit
@@ -329,6 +285,30 @@ export default function InventoryPage() {
           </div>
         </div>
       </div>
+
+      <Drawer
+        open={!!movementItemId}
+        onClose={() => setMovementItemId(null)}
+        title="Stock movement"
+        description={movementItem ? `${movementItem.sku} · ${movementItem.name}` : undefined}
+        footer={<div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setMovementItemId(null)}>Cancel</button><button form="movement-form" className="btn-primary">Save movement</button></div>}
+      >
+        {movementItem && (
+          <>
+            <div className="mb-5 grid grid-cols-3 gap-2 rounded-xl bg-stone-50 p-3 text-sm">
+              <p><span className="text-stone-400">On hand</span><br /><span className="numeral text-lg">{Number(movementItem.quantity)}</span> {movementItem.unit}</p>
+              <p><span className="text-stone-400">Available</span><br /><span className={`numeral text-lg ${Number(movementItem.available ?? 0) < 0 ? "text-amber-700" : "text-emerald-700"}`}>{Number(movementItem.available ?? 0)}</span> {movementItem.unit}</p>
+              <p><span className="text-stone-400">Reserved</span><br /><span className="numeral text-lg">{Number(movementItem.reserved ?? 0)}</span> {movementItem.unit}</p>
+            </div>
+            <form id="movement-form" onSubmit={saveMovement} className="grid gap-4 sm:grid-cols-2">
+              <div><label htmlFor="movement-type">Type</label><select id="movement-type" value={movement.type} onChange={(e) => setMovement({ ...movement, type: e.target.value })}><option value="IN">Stock In</option><option value="OUT">Stock Out</option><option value="ADJUSTMENT">Adjustment</option></select></div>
+              <div><label htmlFor="movement-qty">Quantity</label><input id="movement-qty" type="number" placeholder="Quantity" value={movement.quantity} onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })} /></div>
+              <div className="sm:col-span-2"><label htmlFor="movement-reason">Reason</label><input id="movement-reason" placeholder="Reason" value={movement.reason} onChange={(e) => setMovement({ ...movement, reason: e.target.value })} /></div>
+              <div className="sm:col-span-2"><label htmlFor="movement-ref">Reference <span className="font-normal text-stone-400">(optional)</span></label><input id="movement-ref" placeholder="Reference" value={movement.reference} onChange={(e) => setMovement({ ...movement, reference: e.target.value })} /></div>
+            </form>
+          </>
+        )}
+      </Drawer>
     </>
   );
 }
