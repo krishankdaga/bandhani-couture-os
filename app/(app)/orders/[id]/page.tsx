@@ -400,7 +400,7 @@ export default function OrderSummaryPage() {
           </div>
           <div className="text-right">
             <p className="text-xs text-stone-400">Profit so far</p>
-            <p className={`text-2xl font-semibold ${profitSoFar >= 0 ? "text-emerald-700" : "text-red-600"}`}>{money(profitSoFar)}</p>
+            <p className={`numeral text-3xl ${profitSoFar >= 0 ? "text-emerald-700" : "text-red-600"}`}>{money(profitSoFar)}</p>
             <p className="text-xs text-stone-400">{marginSoFar.toFixed(1)}% margin</p>
           </div>
         </div>

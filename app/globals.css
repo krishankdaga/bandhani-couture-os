@@ -188,6 +188,30 @@
     @apply font-medium text-accent-deep underline-offset-2 transition hover:text-accent hover:underline;
   }
 
+  /* ----------------------------------------------------------------------
+     Couture identity — brought in from the wordmark into the workspace.
+     Headline metrics are set in the display serif (engraved-label feel) and
+     anchored by a jewellery-gold hairline. Used sparingly: the hero figure,
+     KPI numerals, and section eyebrows — never on body text.
+  ---------------------------------------------------------------------- */
+
+  /* Serif numerals for headline figures — lining + tabular so they align. */
+  .numeral {
+    font-family: var(--font-display);
+    font-variant-numeric: lining-nums tabular-nums;
+    @apply tracking-[-0.01em];
+  }
+
+  /* Section/role eyebrow — the gold all-caps kicker above a headline. */
+  .eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.22em] text-gold;
+  }
+
+  /* A short jewellery-gold hairline that fades out — the signature accent. */
+  .hairline-gold {
+    @apply block h-px w-10 shrink-0 rounded-full bg-gradient-to-r from-gold to-gold/0;
+  }
+
   /* Page content entrance — applied once per route in the app shell. */
   .page-enter {
     animation: page-enter 0.34s cubic-bezier(0.22, 0.61, 0.36, 1);
