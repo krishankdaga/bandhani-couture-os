@@ -176,11 +176,14 @@ test.describe.serial("Core workflows", () => {
   test("create purchase + receive into inventory", async ({ page }) => {
     await login(page, FX.owner.email);
     await navLink(page, "Purchases").click();
-    await page.getByLabel("Vendor Name").fill(`Smoke Vendor ${tag}`);
-    await page.getByLabel("Item Name").fill(`PO Fabric ${tag}`);
-    await page.getByLabel("Quantity", { exact: true }).fill("5");
-    await page.getByLabel("Rate").fill("200");
-    await page.getByRole("button", { name: "Add Purchase" }).click();
+    // Create-in-drawer: open the drawer, then fill the form inside it.
+    await page.getByRole("button", { name: "New purchase" }).click();
+    const createDrawer = page.getByRole("dialog", { name: "New purchase" });
+    await createDrawer.getByLabel("Vendor Name").fill(`Smoke Vendor ${tag}`);
+    await createDrawer.getByLabel("Item Name").fill(`PO Fabric ${tag}`);
+    await createDrawer.getByLabel("Quantity", { exact: true }).fill("5");
+    await createDrawer.getByLabel("Rate").fill("200");
+    await createDrawer.getByRole("button", { name: "Add purchase" }).click();
     await expect(page.getByText(`Smoke Vendor ${tag}`).first()).toBeVisible();
 
     // Receive the purchase into inventory. The "Receive stock" button is scoped

@@ -2,9 +2,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, CornerDownLeft, Search, X } from "lucide-react";
+import { ArrowRight, ClipboardList, CornerDownLeft, Package, Search, ShoppingBag, UserPlus, Users, X } from "lucide-react";
 import { api } from "@/lib/client";
 type Result = { id: string; title: string; subtitle: string; href: string };
+
+// Shown when the field is empty — explains the search's reach without looking sparse.
+const SEARCHABLE = [
+  { icon: Users, label: "Customers", hint: "by name, phone or email" },
+  { icon: UserPlus, label: "Leads", hint: "by name or phone" },
+  { icon: ClipboardList, label: "Orders", hint: "by order number" },
+  { icon: Package, label: "Inventory", hint: "by SKU or item name" },
+  { icon: ShoppingBag, label: "Purchases", hint: "by PO number or vendor" },
+];
 export function GlobalSearch() {
   const router = useRouter();
   const [open, setOpen] = useState(false), [query, setQuery] = useState(""), [groups, setGroups] = useState<Record<string, Result[]>>({}), [loading, setLoading] = useState(false), [error, setError] = useState("");
@@ -69,18 +78,26 @@ export function GlobalSearch() {
             {/* Results */}
             <div id="global-search-results" role="listbox" className="max-h-[60vh] overflow-y-auto">
               {query.trim().length < 2 && (
-                <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
-                  <span className="grid h-11 w-11 place-items-center rounded-full bg-stone-100 text-stone-400"><Search size={20} /></span>
-                  <p className="text-sm font-medium text-stone-600">Search across the workspace</p>
-                  <p className="text-xs text-stone-400">Find customers, leads, orders, inventory and purchases. Type at least two characters.</p>
+                <div className="p-2">
+                  <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[.18em] text-stone-400">What you can find</p>
+                  {SEARCHABLE.map((entity) => (
+                    <div key={entity.label} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-500"><entity.icon size={16} /></span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink">{entity.label}</p>
+                        <p className="text-xs text-stone-400">Search {entity.hint}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               {loading && <div className="space-y-2 p-3">{[1, 2, 3].map((item) => <div key={item} className="h-14 animate-pulse rounded-xl bg-stone-100" />)}</div>}
               {error && <p className="m-3 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>}
               {!loading && query.trim().length >= 2 && !error && total === 0 && (
-                <div className="px-6 py-12 text-center">
+                <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
+                  <span className="grid h-11 w-11 place-items-center rounded-full bg-stone-100 text-stone-400"><Search size={20} /></span>
                   <p className="text-sm font-medium text-stone-600">No results for “{query}”</p>
-                  <p className="mt-1 text-xs text-stone-400">No matching records found within your access.</p>
+                  <p className="text-xs text-stone-400">No matching records found within your access.</p>
                 </div>
               )}
               {!loading && Object.entries(groups).map(([label, items]) => items.length ? (
@@ -115,7 +132,12 @@ export function GlobalSearch() {
 
             {/* Footer hint */}
             <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/60 px-4 py-2.5 text-[11px] text-stone-400">
-              <span className="flex items-center gap-1.5"><CornerDownLeft size={12} /> to open</span>
+              <span className="flex items-center gap-1.5">
+                <kbd className="rounded border border-stone-200 bg-white px-1.5 py-0.5 font-medium">↑</kbd>
+                <kbd className="rounded border border-stone-200 bg-white px-1.5 py-0.5 font-medium">↓</kbd>
+                to navigate
+                <span className="ml-1.5 flex items-center gap-1.5"><CornerDownLeft size={12} /> to open</span>
+              </span>
               <span className="flex items-center gap-1.5"><kbd className="rounded border border-stone-200 bg-white px-1.5 py-0.5 font-medium">Esc</kbd> to close</span>
             </div>
           </div>

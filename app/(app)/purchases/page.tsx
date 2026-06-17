@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Drawer } from "@/components/drawer";
-import { Download } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { api, money, shortDate, toast } from "@/lib/client";
 
 export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<any[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [receiveLines, setReceiveLines] = useState<Record<string, any>>({});
   const [search,setSearch]=useState(""); const [statusFilter,setStatusFilter]=useState("ALL"); const [receiptFilter,setReceiptFilter]=useState("ALL"); const [overdueOnly,setOverdueOnly]=useState(false); const [sort,setSort]=useState("NEWEST");
@@ -66,6 +67,7 @@ export default function PurchasesPage() {
       notes: "",
     });
 
+    setShowCreate(false);
     await load();
     toast("Purchase created.");
   }
@@ -109,64 +111,39 @@ export default function PurchasesPage() {
         eyebrow="Phase 2 unlocked"
         title="Purchases"
         description="Create purchase entries and receive stock directly into inventory."
-        action={<a href="/api/export/purchases" className="btn-secondary flex items-center gap-2"><Download size={16} />Export CSV</a>}
+        action={
+          <div className="flex items-center gap-2">
+            <a href="/api/export/purchases" className="btn-secondary flex items-center gap-2"><Download size={16} />Export CSV</a>
+            <button type="button" onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2"><Plus size={16} />New purchase</button>
+          </div>
+        }
       />
       <div className="card mb-5 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find purchases</h2><p className="text-xs text-stone-500">Search vendors and items, then focus on receipts that need action.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Purchase no., vendor or item"/><select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="ALL">All statuses</option>{["REQUESTED","ORDERED","RECEIVED","CANCELLED"].map((item)=><option key={item}>{item}</option>)}</select><select value={receiptFilter} onChange={(e)=>setReceiptFilter(e.target.value)}><option value="ALL">All receipts</option><option value="PENDING">Pending receipt</option><option value="RECEIVED">Received</option></select><select value={sort} onChange={(e)=>setSort(e.target.value)}><option value="NEWEST">Newest</option><option value="EXPECTED">Expected date</option><option value="AMOUNT">Amount: high to low</option></select><label className="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 normal-case tracking-normal"><input type="checkbox" className="h-4 w-4" checked={overdueOnly} onChange={(e)=>setOverdueOnly(e.target.checked)}/><span className="text-sm">Expected date overdue</span></label></div><p className="mt-3 text-xs text-stone-500">Showing {filteredPurchases.length} of {purchases.length} purchases.</p></div>
 
-      <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
-        <form onSubmit={submit} className="card space-y-4 p-5">
-          <h2 className="text-lg font-semibold">New Purchase</h2>
-
-          <Input
-            label="Vendor Name"
-            value={form.vendorName}
-            onChange={(v) => setForm({ ...form, vendorName: v })}
-          />
-
-          <Input
-            label="Item Name"
-            value={form.itemName}
-            onChange={(v) => setForm({ ...form, itemName: v })}
-          />
-
-          <Input
-            label="Quantity"
-            type="number"
-            value={form.quantity}
-            onChange={(v) => setForm({ ...form, quantity: Number(v) })}
-          />
-
-          <Input
-            label="Unit"
-            value={form.unit}
-            onChange={(v) => setForm({ ...form, unit: v })}
-          />
-
-          <Input
-            label="Rate"
-            type="number"
-            value={form.rate}
-            onChange={(v) => setForm({ ...form, rate: Number(v) })}
-          />
-
-          <Input
-            label="Expected Date"
-            type="date"
-            value={form.expectedDate}
-            onChange={(v) => setForm({ ...form, expectedDate: v })}
-          />
-
-          <Input
-            label="Notes"
-            value={form.notes}
-            onChange={(v) => setForm({ ...form, notes: v })}
-          />
-
-          <button className="btn-primary w-full">
-            Add Purchase
-          </button>
+      <Drawer
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="New purchase"
+        description="Record a purchase order; receive it into inventory once it arrives."
+        footer={
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary btn-sm">Cancel</button>
+            <button form="purchase-form" className="btn-primary btn-sm flex items-center gap-1.5"><Plus size={14} />Add purchase</button>
+          </div>
+        }
+      >
+        <form id="purchase-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2"><Input label="Vendor Name" value={form.vendorName} onChange={(v) => setForm({ ...form, vendorName: v })} /></div>
+          <div className="sm:col-span-2"><Input label="Item Name" value={form.itemName} onChange={(v) => setForm({ ...form, itemName: v })} /></div>
+          <Input label="Quantity" type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: Number(v) })} />
+          <Input label="Unit" value={form.unit} onChange={(v) => setForm({ ...form, unit: v })} />
+          <Input label="Rate" type="number" value={form.rate} onChange={(v) => setForm({ ...form, rate: Number(v) })} />
+          <Input label="Expected Date" type="date" value={form.expectedDate} onChange={(v) => setForm({ ...form, expectedDate: v })} />
+          <div className="sm:col-span-2"><Input label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} /></div>
         </form>
+      </Drawer>
 
+      <div className="grid gap-5">
         <div className="card overflow-hidden">
           <div className="border-b border-stone-100 px-5 py-4">
             <h2 className="text-lg font-semibold">Purchase Records</h2>
