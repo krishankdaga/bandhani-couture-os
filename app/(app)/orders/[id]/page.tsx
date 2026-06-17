@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertTriangle, CreditCard, FileText, IndianRupee, Package, Pencil, Plus, Ruler, Save, Scissors, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, CreditCard, FileText, IndianRupee, Package, Pencil, Plus, Ruler, Save, Scissors, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
@@ -11,7 +11,7 @@ import { api, money, shortDate, toast } from "@/lib/client";
 type Stage = {
   id: string; type: string; sequence: number; status: string; delayState: string;
   dueDate: string; startDate: string | null; completionDate: string | null;
-  vendorName: string | null; remarks: string | null; owner: { name: string } | null;
+  vendorName: string | null; remarks: string | null; cost: string | number; owner: { name: string } | null;
 };
 type Order = {
   orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string;
@@ -23,6 +23,7 @@ type Payment = { id: string; amount: string; method: string; kind: string; note:
 type Material = {
   id: string; inventoryItemId: string; sku: string; name: string; unit: string; category: string;
   requiredQty: number; consumedQty: number; remainingQty: number; note: string | null; createdBy: string | null;
+  costPrice: number; committedCost: number; consumedCost: number;
   dyeColour: string | null; dyeInstructions: string | null;
   itemOnHand: number; itemReserved: number; itemAvailable: number; itemShortage: number;
 };
@@ -58,14 +59,14 @@ const toDateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
 function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ status: stage.status, vendorName: stage.vendorName ?? "", dueDate: toDateInput(stage.dueDate), remarks: stage.remarks ?? "" });
+  const [form, setForm] = useState({ status: stage.status, vendorName: stage.vendorName ?? "", dueDate: toDateInput(stage.dueDate), remarks: stage.remarks ?? "", cost: String(stage.cost ?? 0) });
 
   async function save() {
     setSaving(true);
     try {
       await api(`/api/stages/${stage.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: form.status, vendorName: form.vendorName || null, dueDate: form.dueDate, remarks: form.remarks || null }),
+        body: JSON.stringify({ status: form.status, vendorName: form.vendorName || null, dueDate: form.dueDate, remarks: form.remarks || null, cost: Number(form.cost) || 0 }),
       });
       toast("Stage updated.");
       setOpen(false);
@@ -84,7 +85,7 @@ function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean;
           <span className="grid h-7 w-7 place-items-center rounded-full bg-stone-100 text-xs font-bold text-stone-500">{stage.sequence}</span>
           <div>
             <p className="text-sm font-semibold">{stage.type.replaceAll("_", " ")}</p>
-            <p className="text-xs text-stone-500">Due {shortDate(stage.dueDate)} · {stage.owner?.name || stage.vendorName || "Unassigned"}</p>
+            <p className="text-xs text-stone-500">Due {shortDate(stage.dueDate)} · {stage.owner?.name || stage.vendorName || "Unassigned"}{Number(stage.cost) > 0 ? ` · ${money(stage.cost)}` : ""}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -99,6 +100,7 @@ function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean;
           <div><label>Status</label><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>{STAGE_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}</select></div>
           <div><label>Due date</label><input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
           <div><label>Vendor / karigar</label><input value={form.vendorName} onChange={(e) => setForm({ ...form, vendorName: e.target.value })} placeholder="e.g. Riyaz embroidery" /></div>
+          <div><label>Stage cost (₹)</label><input type="number" min="0" step="1" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} placeholder="e.g. labour / karigar charge" /></div>
           <div><label>Remarks</label><input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} placeholder="Notes for this stage" /></div>
           <div className="md:col-span-2 flex justify-end"><button onClick={save} disabled={saving} className="btn-primary btn-sm">{saving ? "Saving..." : "Save stage"}</button></div>
         </div>
@@ -285,6 +287,17 @@ export default function OrderSummaryPage() {
   const shortageLines = materials.filter((m) => m.itemShortage > 0);
   const selectedStock = stockOptions.find((s) => s.id === matForm.inventoryItemId);
 
+  // ── Live costing: cost accrues as materials are consumed and stage costs are logged ──
+  const materialCommittedCost = materials.reduce((sum, m) => sum + m.committedCost, 0);
+  const materialUsedCost = materials.reduce((sum, m) => sum + m.consumedCost, 0);
+  const productionCost = order.stages.reduce((sum, s) => sum + Number(s.cost ?? 0), 0);
+  const costSoFar = materialUsedCost + productionCost;          // actually incurred to date
+  const projectedCost = materialCommittedCost + productionCost; // if all allocated material is used
+  const profitSoFar = orderValue - costSoFar;
+  const projectedProfit = orderValue - projectedCost;
+  const marginSoFar = orderValue > 0 ? (profitSoFar / orderValue) * 100 : 0;
+  const hasCostData = materials.length > 0 || productionCost > 0;
+
   return (
     <div className="print-summary">
       <PageHeader
@@ -376,6 +389,29 @@ export default function OrderSummaryPage() {
         <div className="card p-4"><p className="text-xs text-stone-400">Amount paid</p><p className="mt-1 text-lg font-semibold text-emerald-700">{money(net)}</p></div>
         <div className="card p-4"><p className="text-xs text-stone-400">Balance due</p><p className={`mt-1 text-lg font-semibold ${balance > 0 ? "text-wine" : "text-emerald-700"}`}>{money(balance)}</p></div>
         <div className="card p-4"><p className="text-xs text-stone-400">Delivery</p><p className="mt-1 text-lg font-semibold">{shortDate(order.deliveryDate)}</p><div className="mt-2 flex gap-2"><StatusBadge value={order.status} /><StatusBadge value={order.delayState} /></div></div>
+      </section>
+
+      {/* Costing & profit — material cost accrues as stock is consumed; stage costs add labour */}
+      <section className="card mt-5 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-stone-100 p-5">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-wine/10 text-wine"><TrendingUp size={20} /></span>
+            <div><h2 className="font-semibold">Costing &amp; profit</h2><p className="text-xs text-stone-500">Booked at {money(orderValue)}. Cost builds up as materials are consumed and production stages are charged.</p></div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-stone-400">Profit so far</p>
+            <p className={`text-2xl font-semibold ${profitSoFar >= 0 ? "text-emerald-700" : "text-red-600"}`}>{money(profitSoFar)}</p>
+            <p className="text-xs text-stone-400">{marginSoFar.toFixed(1)}% margin</p>
+          </div>
+        </div>
+        <div className="grid gap-px bg-stone-100 md:grid-cols-4">
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Booked value</p><p className="mt-1 text-lg font-semibold">{money(orderValue)}</p></div>
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Material used</p><p className="mt-1 text-lg font-semibold">{money(materialUsedCost)}</p><p className="text-[11px] text-stone-400">{money(materialCommittedCost)} allocated</p></div>
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Production cost</p><p className="mt-1 text-lg font-semibold">{money(productionCost)}</p><p className="text-[11px] text-stone-400">across {order.stages.length} stages</p></div>
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Total cost so far</p><p className="mt-1 text-lg font-semibold text-wine">{money(costSoFar)}</p><p className="text-[11px] text-stone-400">{money(projectedCost)} projected</p></div>
+        </div>
+        {!hasCostData && <p className="border-t border-stone-100 px-5 py-3 text-xs text-stone-400">No material or stage costs recorded yet. Allocate materials (with a cost price set in inventory) and enter stage costs to track profit.</p>}
+        {hasCostData && profitSoFar !== projectedProfit && <p className="border-t border-stone-100 px-5 py-3 text-xs text-stone-500">If all allocated material is consumed, projected profit is <span className={`font-semibold ${projectedProfit >= 0 ? "text-emerald-700" : "text-red-600"}`}>{money(projectedProfit)}</span>.</p>}
       </section>
 
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -487,7 +523,7 @@ export default function OrderSummaryPage() {
                 <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{m.name} <span className="text-xs font-normal text-stone-400">{m.sku}</span>{m.itemShortage > 0 && <span className="badge ml-2 bg-amber-100 text-amber-700">SHORT {m.itemShortage} {m.unit}</span>}</p>
-                    <p className="text-xs text-stone-500">Allocated {m.requiredQty} {m.unit} · consumed {m.consumedQty} · {m.remainingQty} remaining{m.note ? ` · ${m.note}` : ""}</p>
+                    <p className="text-xs text-stone-500">Allocated {m.requiredQty} {m.unit} · consumed {m.consumedQty} · {m.remainingQty} remaining{m.note ? ` · ${m.note}` : ""}{m.costPrice > 0 ? ` · ${money(m.consumedCost)} used of ${money(m.committedCost)}` : ""}</p>
                     {(m.dyeColour || m.dyeInstructions) && (
                       <p className="mt-0.5 text-xs text-stone-500">
                         {m.dyeColour && <span className="font-medium text-stone-700">Colour: {m.dyeColour}</span>}

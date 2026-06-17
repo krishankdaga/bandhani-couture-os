@@ -355,6 +355,7 @@ model ProductionStage {
   completionDate DateTime?
   status         StageStatus         @default(NOT_STARTED)
   remarks        String?
+  cost           Decimal             @default(0) @db.Decimal(12, 2)
   delayState     DelayState          @default(GREEN)
   hasEverBeenRed Boolean             @default(false)
   pardons        DelayPardon[]

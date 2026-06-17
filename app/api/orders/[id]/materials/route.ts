@@ -40,6 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const standing = stockStanding(material.inventoryItem);
     const required = Number(material.requiredQty);
     const consumed = Number(material.consumedQty);
+    const costPrice = Number(material.inventoryItem.costPrice ?? 0);
     return {
       id: material.id,
       inventoryItemId: material.inventoryItemId,
@@ -50,6 +51,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       requiredQty: required,
       consumedQty: consumed,
       remainingQty: Math.max(0, required - consumed),
+      // Cost accounting: unit cost from inventory, committed (allocated) vs used (consumed).
+      costPrice,
+      committedCost: required * costPrice,
+      consumedCost: consumed * costPrice,
       note: material.note,
       dyeColour: material.dyeColour,
       dyeInstructions: material.dyeInstructions,

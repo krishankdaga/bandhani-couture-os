@@ -7,7 +7,7 @@ const labels = (role: string) => navigationForRole(role).map((item) => item.labe
 test("owner receives the complete CBOS navigation", () => {
   assert.deepEqual(labels("OWNER"), [
     "Dashboard", "Leads", "Customers", "Orders", "Command Center", "Production", "Inventory", "Purchases",
-    "Pricing", "Reports", "Incentives", "WhatsApp Automation", "Bandhani Assistant", "Employees", "Roles & Access",
+    "Reports", "Incentives", "WhatsApp Automation", "Bandhani Assistant", "Employees", "Roles & Access",
     "Data Health", "Audit Logs", "Settings",
   ]);
 });

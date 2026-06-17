@@ -34,6 +34,13 @@ export function aggregateOrderDelay(states: DelayState[], hasEverBeenRed: boolea
   return DelayState.GREEN;
 }
 
+/** What each delay state actually means — shown to users instead of the colour name. */
+export const DELAY_STATE_LABELS: Record<DelayState, string> = {
+  [DelayState.GREEN]: "On track",
+  [DelayState.YELLOW]: "At risk",
+  [DelayState.RED]: "Delayed",
+};
+
 export const stageLabels = {
   DYEING_PATTERN_CUTTING: "Dyeing & Pattern Cutting",
   EMBROIDERY: "Embroidery",

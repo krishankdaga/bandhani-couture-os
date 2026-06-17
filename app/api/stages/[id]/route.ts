@@ -11,6 +11,7 @@ const schema = z.object({
   ownerId: z.string().nullable().optional(), vendorName: z.string().nullable().optional(),
   startDate: z.string().date().nullable().optional(), dueDate: z.string().date().optional(), completionDate: z.string().date().nullable().optional(),
   status: z.nativeEnum(StageStatus).optional(), remarks: z.string().nullable().optional(),
+  cost: z.coerce.number().min(0, "Cost cannot be negative").max(99_999_999).optional(),
 });
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -40,6 +41,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           startDate: input.startDate === undefined ? undefined : input.startDate ? new Date(input.startDate) : null,
           dueDate, completionDate,
           status: nextStatus, remarks: input.remarks, delayState, hasEverBeenRed,
+          ...(input.cost !== undefined && { cost: input.cost }),
         },
       });
       const allStages = await tx.productionStage.findMany({ where: { orderId: old.orderId } });
