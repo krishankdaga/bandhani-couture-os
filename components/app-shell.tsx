@@ -69,8 +69,8 @@ function AppShellInner({ user, children }: { user: ShellUser; children: React.Re
   return <div className="flex min-h-screen bg-sand">
     <Sidebar permissions={sidebarPermissions} companyStatus={user.companyStatus} mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     <div className="min-w-0 flex-1">
-      <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-stone-200/80 bg-white/80 px-4 backdrop-blur-md md:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="sticky top-0 z-30 flex h-20 items-center gap-3 border-b border-stone-200/80 bg-white/80 px-4 backdrop-blur-md md:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <button aria-label="Open navigation" className="rounded-lg border border-stone-200 p-2 text-stone-600 hover:bg-stone-50 lg:hidden" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button>
           <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
             <Link href="/" className="hidden text-stone-400 hover:text-wine sm:inline">Couture OS</Link>
@@ -80,7 +80,11 @@ function AppShellInner({ user, children }: { user: ShellUser; children: React.Re
           </nav>
         </div>
 
-        <div className="flex items-center gap-2"><GlobalSearch /><NotificationCenter /><div ref={menuRef} className="relative">
+        {/* Centered on the full viewport: the header sits right of the 256px (w-64)
+            sidebar on lg+, so shift left by half the sidebar width to hit true page center. */}
+        <div className="flex shrink-0 justify-center lg:-translate-x-32"><GlobalSearch /></div>
+
+        <div className="flex flex-1 items-center justify-end gap-2"><NotificationCenter /><div ref={menuRef} className="relative">
           <button aria-expanded={profileOpen} aria-haspopup="menu" onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2 rounded-xl p-1.5 pr-2 hover:bg-stone-50">
             {user.image
               ? <img src={user.image} alt={user.name} className="h-9 w-9 rounded-lg object-cover ring-1 ring-stone-200" />

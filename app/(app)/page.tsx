@@ -44,7 +44,7 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-[1500px]">
       {/* ── State of the atelier (hero) ── */}
       <section className="relative mb-6 overflow-hidden card p-6 sm:p-8">
-        <img src="/bandhani-emblem.png" alt="" aria-hidden="true" className="pointer-events-none absolute -right-8 -top-8 h-52 w-52 select-none object-contain opacity-[0.06]" />
+        <img src="/bandhani-emblem.png" alt="" aria-hidden="true" className="pointer-events-none absolute right-6 top-6 h-40 w-40 select-none object-contain opacity-[0.06]" />
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-3"><span className="hairline-gold" /><p className="eyebrow">{role}</p></div>

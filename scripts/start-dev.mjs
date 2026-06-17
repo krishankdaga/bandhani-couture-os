@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFile, rm, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -24,17 +24,24 @@ async function localGroqEnv() {
   }
 }
 
-async function processExists(pid) {
-  try { process.kill(pid, 0); return true; }
-  catch (error) { return error?.code === "EPERM"; }
+// A lock is only "live" if its PID is BOTH running AND actually this project's dev
+// process. This guards against a stale lock left behind when a previous server was
+// force-killed (SIGKILL skips cleanup) or whose PID has since been reused by an
+// unrelated process — either of which would otherwise block a fresh `npm run dev`.
+function liveDevServer(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
+  if (result.status !== 0 || !result.stdout) return false;
+  return /start-dev\.mjs|next/.test(result.stdout);
 }
 
 try {
   const existingPid = Number(await readFile(lockPath, "utf8"));
-  if (Number.isInteger(existingPid) && await processExists(existingPid)) {
+  if (liveDevServer(existingPid)) {
     console.error(`Bandhani Couture OS development server is already running (PID ${existingPid}). Stop that terminal with Ctrl+C before starting another.`);
     process.exit(1);
   }
+  // Stale lock — reclaim it.
   await unlink(lockPath).catch(() => {});
 } catch (error) {
   if (error?.code !== "ENOENT") throw error;
