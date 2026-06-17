@@ -72,7 +72,7 @@ export function Drawer({
 
   return createPortal(
     <div className="fixed inset-0 z-[90]">
-      <div className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 animate-fade-in bg-ink/40" onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"

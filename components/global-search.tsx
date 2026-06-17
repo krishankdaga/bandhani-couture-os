@@ -66,7 +66,7 @@ export function GlobalSearch() {
       <button aria-label="Search Couture OS" onClick={() => setOpen(true)} className="rounded-xl border border-stone-200 p-2.5 md:hidden"><Search size={18} /></button>
 
       {open && (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center bg-ink/50 px-4 pt-[12vh] backdrop-blur-sm animate-fade-in" onMouseDown={(event) => event.currentTarget === event.target && setOpen(false)}>
+        <div className="fixed inset-0 z-[80] flex items-start justify-center bg-ink/40 px-4 pt-[12vh] animate-fade-in" onMouseDown={(event) => event.currentTarget === event.target && setOpen(false)}>
           <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl animate-scale-in">
             {/* Search field */}
             <div className="flex items-center gap-3 border-b border-stone-100 px-4">

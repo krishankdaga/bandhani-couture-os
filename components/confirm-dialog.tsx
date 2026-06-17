@@ -108,7 +108,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {children}
       {mounted && req && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-sm" onClick={cancel} aria-hidden="true" />
+          <div className="absolute inset-0 animate-fade-in bg-ink/40" onClick={cancel} aria-hidden="true" />
           <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" className="card animate-scale-in relative w-full max-w-md p-6">
             <div className="flex items-start gap-3">
               {req.tone === "danger" && (
