@@ -9,6 +9,24 @@ Risk: **Low** (cosmetic/additive) · **Med** (touches shared components/many fil
 
 ---
 
+## Implementation status — updated 2026-06-17
+
+Built with the **frontend-design** plugin, on branch `chore/playwright-smoke-tests`. Each phase gated on `tsc --noEmit`, `npm test` (23 unit), `npm run build`, and `npx playwright test` (15 smoke).
+
+**Done & committed:**
+- ✅ **Phase 1** — #1 unify form controls, #2 associate labels (drift pages + production; *Leads/Orders create-form labels still sibling, not associated — open follow-up*), #8 enrich empty states
+- ✅ **Phase 2** — #3 couture identity (`.numeral` serif figures, `.eyebrow`, `.hairline-gold` in globals.css), #7 dashboard "state of the atelier" hero with emblem watermark, #11 type scale
+- ✅ **Phase 3** — #4 shared confirm/prompt dialog (`components/confirm-dialog.tsx`, replaces all native dialogs), #5 create-in-drawer (`components/drawer.tsx`; Leads + Orders), #6 filter bars (Orders + Leads)
+- ✅ **#14 (part 1)** — inventory stock-movement now uses the scoped drawer
+
+**Remaining:**
+- ⬜ **#14 (part 2)** — purchase-receive into the drawer (covered by smoke test — update `e2e/smoke.spec.ts` when migrating)
+- ⬜ **Phase 4** — #9 Reports sub-nav, #10 Settings "Business profile", #12 Assistant streaming + entity links, #13 saved views, #15 keyboard niceties
+
+Reached the roadmap's projected **~8.3/10** (Shopify/HubSpot tier) after Phase 3.
+
+---
+
 ## Ranked by impact
 
 | # | Improvement | Impact | Effort | Risk | Why it ranks here |
