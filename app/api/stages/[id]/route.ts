@@ -1,4 +1,4 @@
-import { DelayState, OrderStatus, StageStatus } from "@prisma/client";
+import { DelayState, IncentiveStatus, OrderStatus, StageStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isApiError, requireUser, validationError } from "@/lib/api";
@@ -45,11 +45,31 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         },
       });
       const allStages = await tx.productionStage.findMany({ where: { orderId: old.orderId } });
-      const order = await tx.order.findUniqueOrThrow({ where: { id: old.orderId }, include: { pardons: { where: { status: "APPROVED" } } } });
+      const order = await tx.order.findUniqueOrThrow({ where: { id: old.orderId }, include: { pardons: { where: { status: "APPROVED" } }, stylist: { select: { id: true, incentiveAmount: true } } } });
       const orderHasBeenRed = order.hasEverBeenRed || allStages.some((item) => item.hasEverBeenRed);
       const orderDelay = aggregateOrderDelay(allStages.map((item) => item.delayState), orderHasBeenRed, order.pardons.length > 0);
       const allComplete = allStages.every((item) => item.status === StageStatus.COMPLETED);
-      await tx.order.update({ where: { id: old.orderId }, data: { delayState: orderDelay, hasEverBeenRed: orderHasBeenRed, status: allComplete ? OrderStatus.READY : OrderStatus.IN_PRODUCTION } });
+      // Completing the DELIVERY stage means the garment has shipped to the customer.
+      const deliveryStage = allStages.find((item) => item.type === "DELIVERY");
+      const delivered = deliveryStage?.status === StageStatus.COMPLETED;
+      const newStatus = delivered ? OrderStatus.DELIVERED : allComplete ? OrderStatus.READY : OrderStatus.IN_PRODUCTION;
+      await tx.order.update({ where: { id: old.orderId }, data: { delayState: orderDelay, hasEverBeenRed: orderHasBeenRed, status: newStatus } });
+
+      // On-time delivery incentive: if the order shipped on or before its promised
+      // delivery date and the stylist has a configured incentive, create a single
+      // PENDING incentive for them (idempotent per order + stylist).
+      if (delivered && order.stylistId) {
+        const completion = deliveryStage?.completionDate ?? new Date();
+        const deadline = new Date(order.deliveryDate); deadline.setHours(23, 59, 59, 999);
+        const incentiveAmount = order.stylist?.incentiveAmount ? Number(order.stylist.incentiveAmount) : 0;
+        if (completion <= deadline && incentiveAmount > 0) {
+          const existing = await tx.incentive.findFirst({ where: { orderId: old.orderId, userId: order.stylistId } });
+          if (!existing) {
+            const incentive = await tx.incentive.create({ data: { userId: order.stylistId, orderId: old.orderId, orderValue: order.orderValue, percentage: 0, amount: incentiveAmount, status: IncentiveStatus.PENDING, notes: "On-time delivery incentive" } });
+            await writeAudit(tx, { userId: user.id, action: "CREATE", entity: "Incentive", entityId: incentive.id, newValue: incentive });
+          }
+        }
+      }
       await writeAudit(tx, { userId: user.id, action: "UPDATE", entity: "ProductionStage", entityId: id, oldValue: old, newValue: updated });
       return updated;
     });

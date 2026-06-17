@@ -25,6 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     where: { id },
     select: {
       id: true, name: true, email: true, image: true, role: true, companyStatus: true, active: true, createdAt: true,
+      incentiveAmount: true,
       storeId: true, store: { select: { id: true, name: true } },
       companyRole: { select: { name: true, permissions: { select: { permission: true } } } },
       permissionOverrides: { select: { permission: true, granted: true } },
@@ -100,6 +101,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   return NextResponse.json({
     metrics,
+    // Only the owner may configure incentive eligibility.
+    canManageIncentive: requester.companyStatus === "OWNER",
     profile: {
       id: employee.id,
       name: employee.name,
@@ -111,6 +114,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       store: employee.store,
       active: employee.active,
       createdAt: employee.createdAt,
+      incentiveAmount: employee.incentiveAmount != null ? Number(employee.incentiveAmount) : null,
       permissions,
     },
     recentAudit,

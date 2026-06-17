@@ -50,35 +50,13 @@ function parseCustomMeasurements(raw: Record<string, unknown>): CustomMeasuremen
   });
 }
 
-const STAGE_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"] as const;
 const METHODS = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"] as const;
 const KINDS = ["ADVANCE", "PARTIAL", "FINAL", "REFUND"] as const;
 const kindTone: Record<string, string> = { ADVANCE: "bg-blue-100 text-blue-700", PARTIAL: "bg-amber-100 text-amber-700", FINAL: "bg-emerald-100 text-emerald-700", REFUND: "bg-red-100 text-red-700" };
 
-const toDateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
-
-function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean; onSaved: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ status: stage.status, vendorName: stage.vendorName ?? "", dueDate: toDateInput(stage.dueDate), remarks: stage.remarks ?? "", cost: String(stage.cost ?? 0) });
-
-  async function save() {
-    setSaving(true);
-    try {
-      await api(`/api/stages/${stage.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: form.status, vendorName: form.vendorName || null, dueDate: form.dueDate, remarks: form.remarks || null, cost: Number(form.cost) || 0 }),
-      });
-      toast("Stage updated.");
-      setOpen(false);
-      onSaved();
-    } catch (caught) {
-      toast((caught as Error).message, "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
+// Display-only stage row. Production is managed from the Production workspace;
+// the order page just shows the live status of each stage.
+function StageRow({ stage }: { stage: Stage }) {
   return (
     <div className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -92,20 +70,9 @@ function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean;
         <div className="flex items-center gap-2">
           <StatusBadge value={stage.status} />
           <StatusBadge value={stage.delayState} />
-          {canEdit && <button onClick={() => setOpen(!open)} className="btn-secondary btn-sm">{open ? "Close" : "Manage"}</button>}
         </div>
       </div>
-      {stage.remarks && !open && <p className="mt-2 pl-10 text-xs text-stone-500">“{stage.remarks}”</p>}
-      {open && canEdit && (
-        <div className="mt-4 grid gap-3 rounded-xl border border-stone-200 bg-stone-50/60 p-4 md:grid-cols-2">
-          <div><label>Status</label><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>{STAGE_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}</select></div>
-          <div><label>Due date</label><input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
-          <div><label>Vendor / karigar</label><input value={form.vendorName} onChange={(e) => setForm({ ...form, vendorName: e.target.value })} placeholder="e.g. Riyaz embroidery" /></div>
-          <div><label>Stage cost (₹)</label><input type="number" min="0" step="1" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} placeholder="e.g. labour / karigar charge" /></div>
-          <div><label>Remarks</label><input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} placeholder="Notes for this stage" /></div>
-          <div className="md:col-span-2 flex justify-end"><button onClick={save} disabled={saving} className="btn-primary btn-sm">{saving ? "Saving..." : "Save stage"}</button></div>
-        </div>
-      )}
+      {stage.remarks && <p className="mt-2 pl-10 text-xs text-stone-500">“{stage.remarks}”</p>}
     </div>
   );
 }
@@ -121,6 +88,8 @@ export default function OrderSummaryPage() {
   const [payForm, setPayForm] = useState({ amount: "", kind: "ADVANCE", method: "CASH", paidAt: "", note: "" });
   const [savingPay, setSavingPay] = useState(false);
   const [payError, setPayError] = useState("");
+  const [editPay, setEditPay] = useState<{ id: string; amount: string; kind: string; method: string; paidAt: string; note: string } | null>(null);
+  const [savingEditPay, setSavingEditPay] = useState(false);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [stockOptions, setStockOptions] = useState<StockOption[]>([]);
   const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", dyeColour: "", dyeInstructions: "", allowShortage: false });
@@ -172,6 +141,26 @@ export default function OrderSummaryPage() {
       setPayForm({ amount: "", kind: "ADVANCE", method: "CASH", paidAt: "", note: "" });
       await reloadPayments();
     } catch (caught) { setPayError((caught as Error).message); } finally { setSavingPay(false); }
+  }
+
+  function startEditPayment(p: Payment) {
+    setPayError("");
+    setEditPay({ id: p.id, amount: String(Number(p.amount)), kind: p.kind, method: p.method, paidAt: p.paidAt.slice(0, 10), note: p.note ?? "" });
+  }
+
+  async function saveEditPayment(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editPay) return;
+    setSavingEditPay(true); setPayError("");
+    try {
+      await api(`/api/orders/${id}/payments/${editPay.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ amount: Number(editPay.amount), kind: editPay.kind, method: editPay.method, note: editPay.note || null, paidAt: editPay.paidAt || undefined }),
+      });
+      toast("Payment updated.");
+      setEditPay(null);
+      await reloadPayments();
+    } catch (caught) { setPayError((caught as Error).message); } finally { setSavingEditPay(false); }
   }
 
   async function removePayment(paymentId: string) {
@@ -479,16 +468,35 @@ export default function OrderSummaryPage() {
 
           <div className="mt-5 divide-y divide-stone-100">
             {payments.length ? payments.map((p) => (
-              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-9 w-9 place-items-center rounded-lg bg-stone-100 text-stone-500"><IndianRupee size={16} /></span>
-                  <div>
-                    <p className="text-sm font-semibold">{money(p.amount)} <span className={`badge ml-1 ${kindTone[p.kind] ?? "bg-stone-100 text-stone-600"}`}>{p.kind}</span></p>
-                    <p className="text-xs text-stone-500">{p.method.replaceAll("_", " ")} · {shortDate(p.paidAt)}{p.recordedBy ? ` · by ${p.recordedBy.name}` : ""}{p.note ? ` · ${p.note}` : ""}</p>
+              editPay?.id === p.id ? (
+                <form key={p.id} onSubmit={saveEditPayment} className="grid gap-3 py-3 md:grid-cols-12 md:items-end">
+                  <div className="md:col-span-3"><label>Amount (₹)</label><input type="number" min="1" step="1" required value={editPay.amount} onChange={(e) => setEditPay({ ...editPay, amount: e.target.value })} /></div>
+                  <div className="md:col-span-2"><label>Type</label><select value={editPay.kind} onChange={(e) => setEditPay({ ...editPay, kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select></div>
+                  <div className="md:col-span-2"><label>Method</label><select value={editPay.method} onChange={(e) => setEditPay({ ...editPay, method: e.target.value })}>{METHODS.map((m) => <option key={m} value={m}>{m.replaceAll("_", " ")}</option>)}</select></div>
+                  <div className="md:col-span-2"><label>Date</label><input type="date" value={editPay.paidAt} onChange={(e) => setEditPay({ ...editPay, paidAt: e.target.value })} /></div>
+                  <div className="md:col-span-3"><label>Note</label><input value={editPay.note} onChange={(e) => setEditPay({ ...editPay, note: e.target.value })} placeholder="e.g. advance at booking" /></div>
+                  <div className="md:col-span-12 flex justify-end gap-2">
+                    <button type="button" onClick={() => setEditPay(null)} className="btn-secondary btn-sm">Cancel</button>
+                    <button disabled={savingEditPay} className="btn-primary btn-sm flex items-center gap-2"><Save size={15} />{savingEditPay ? "Saving..." : "Save changes"}</button>
                   </div>
+                </form>
+              ) : (
+                <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-stone-100 text-stone-500"><IndianRupee size={16} /></span>
+                    <div>
+                      <p className="text-sm font-semibold">{money(p.amount)} <span className={`badge ml-1 ${kindTone[p.kind] ?? "bg-stone-100 text-stone-600"}`}>{p.kind}</span></p>
+                      <p className="text-xs text-stone-500">{p.method.replaceAll("_", " ")} · {shortDate(p.paidAt)}{p.recordedBy ? ` · by ${p.recordedBy.name}` : ""}{p.note ? ` · ${p.note}` : ""}</p>
+                    </div>
+                  </div>
+                  {canEditOrder && (
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => startEditPayment(p)} className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-ink" aria-label="Edit payment"><Pencil size={15} /></button>
+                      <button onClick={() => removePayment(p.id)} className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove payment"><Trash2 size={15} /></button>
+                    </div>
+                  )}
                 </div>
-                {canEditOrder && <button onClick={() => removePayment(p.id)} className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove payment"><Trash2 size={15} /></button>}
-              </div>
+              )
             )) : <div className="flex items-center gap-2 py-4 text-sm text-stone-400"><CreditCard size={16} />No payments recorded yet.</div>}
           </div>
         </div>
@@ -553,8 +561,8 @@ export default function OrderSummaryPage() {
 
       {/* Production stages */}
       <section className="card mt-5 overflow-hidden">
-        <div className="border-b border-stone-100 p-5"><h2 className="font-semibold">Production stages</h2><p className="text-xs text-stone-500">{canEditProduction ? "Update status, assign a karigar/vendor, set due dates and notes." : "Live status of each atelier stage."}</p></div>
-        <div className="divide-y divide-stone-100">{order.stages.map((stage) => <StageRow key={stage.id} stage={stage} canEdit={canEditProduction} onSaved={load} />)}</div>
+        <div className="border-b border-stone-100 p-5"><h2 className="font-semibold">Production stages</h2><p className="text-xs text-stone-500">Live status of each atelier stage. Manage stages from the Production workspace.</p></div>
+        <div className="divide-y divide-stone-100">{order.stages.map((stage) => <StageRow key={stage.id} stage={stage} />)}</div>
       </section>
     </div>
   );

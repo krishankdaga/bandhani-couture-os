@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
-import { api, shortDate } from "@/lib/client";
+import { api } from "@/lib/client";
 import { ErrorState, LoadingState } from "@/components/async-state";
 
 type SlipMaterial = {
@@ -116,10 +116,6 @@ export default function DyerSlipPage() {
             <span className="font-semibold">Stylist:</span> {order.stylist.name}
           </div>
           <div>
-            <span className="font-semibold">Delivery By:</span>{" "}
-            <span className={isUrgent ? "font-bold" : ""}>{shortDate(order.deliveryDate)}</span>
-          </div>
-          <div>
             <span className="font-semibold">Priority:</span>{" "}
             <span className={isUrgent ? "font-bold uppercase" : ""}>{order.priority}</span>
           </div>
@@ -187,10 +183,6 @@ export default function DyerSlipPage() {
               ) : (
                 order.priority
               )}
-            </div>
-            <div>
-              <span className="font-semibold">Expected Delivery:</span>{" "}
-              <span className={isUrgent ? "font-bold" : ""}>{shortDate(order.deliveryDate)}</span>
             </div>
           </div>
           {order.customisations.length > 0 && (

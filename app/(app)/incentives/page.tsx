@@ -1,8 +1,116 @@
 "use client";
-import { useEffect,useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Coins } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { api,money,toast } from "@/lib/client";
+import { EmptyState } from "@/components/async-state";
+import { Hint } from "@/components/ui";
 import { useConfirm } from "@/components/confirm-dialog";
-const blank={userId:"",orderId:"",orderValue:0,percentage:1.5,status:"PENDING",notes:""};
-export default function Page(){const{confirm}=useConfirm();const[data,setData]=useState<any>({incentives:[],users:[],canManage:false}),[form,setForm]=useState<any>(blank),[editingId,setEditingId]=useState<string|null>(null),[saving,setSaving]=useState(false);async function load(){const result:any=await api("/api/incentives");setData(result);setForm((current:any)=>current.userId?current:{...current,userId:result.users?.[0]?.id||""});}useEffect(()=>{load();},[]);function reset(){setEditingId(null);setForm({...blank,userId:data.users?.[0]?.id||""});}async function submit(event:React.FormEvent){event.preventDefault();setSaving(true);try{await api(editingId?`/api/incentives/${editingId}`:"/api/incentives",{method:editingId?"PATCH":"POST",body:JSON.stringify({...form,orderId:form.orderId||null})});toast(editingId?"Incentive updated.":"Incentive added.");reset();await load();}catch(caught){toast((caught as Error).message,"error");}finally{setSaving(false);}}function edit(item:any){setEditingId(item.id);setForm({userId:item.userId,orderId:item.orderId||"",orderValue:Number(item.orderValue),percentage:Number(item.percentage),status:item.status,notes:item.notes||""});}async function remove(id:string){if(!(await confirm({title:"Delete incentive?",message:"This permanently removes the incentive record. This cannot be undone.",confirmLabel:"Delete",tone:"danger"})))return;try{await api(`/api/incentives/${id}`,{method:"DELETE"});toast("Incentive deleted.");if(editingId===id)reset();await load();}catch(caught){toast((caught as Error).message,"error");}}const names=new Map<string,string>((data.users??[]).map((item:any)=>[item.id,item.name]));return <><PageHeader eyebrow="Payments" title="Incentives" description="Add, approve and record incentive payments for team members. The amount is recalculated from order value and percentage."/><div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800"><strong>What to do here:</strong> choose the employee, enter the qualifying order value and incentive percentage, then move the status from Pending to Approved and Paid.</div><div className="grid gap-5 xl:grid-cols-[420px_1fr]">{data.canManage&&<form onSubmit={submit} className="card space-y-4 p-5"><div className="flex items-center justify-between"><h2 className="font-semibold">{editingId?"Edit incentive":"Add incentive"}</h2>{editingId&&<button type="button" onClick={reset} className="text-sm text-stone-500">Cancel</button>}</div><label>Employee<select value={form.userId} onChange={(e)=>setForm({...form,userId:e.target.value})}>{data.users?.map((item:any)=><option key={item.id} value={item.id}>{item.name} · {item.role.replaceAll("_"," ")}</option>)}</select></label><label>Order reference (optional)<input value={form.orderId} onChange={(e)=>setForm({...form,orderId:e.target.value})} placeholder="Order ID or reference"/></label><label>Order value<input type="number" min="1" value={form.orderValue} onChange={(e)=>setForm({...form,orderValue:Number(e.target.value)})}/><span className="mt-1 block text-[11px] normal-case tracking-normal text-stone-400">The sale value used to calculate the incentive.</span></label><label>Incentive percentage<input type="number" min="0" step="0.1" value={form.percentage} onChange={(e)=>setForm({...form,percentage:Number(e.target.value)})}/><span className="mt-1 block text-[11px] normal-case tracking-normal text-stone-400">Calculated amount: {money(form.orderValue*form.percentage/100)}</span></label><label>Status<select value={form.status} onChange={(e)=>setForm({...form,status:e.target.value})}>{["PENDING","APPROVED","PAID"].map((item)=><option key={item}>{item}</option>)}</select></label><label>Notes<input value={form.notes} onChange={(e)=>setForm({...form,notes:e.target.value})}/></label><button disabled={saving} className="btn-primary w-full">{saving?"Saving...":editingId?"Save changes":"Add incentive"}</button></form>}<div className="card overflow-hidden"><div className="border-b p-4"><h2 className="font-semibold">Incentive records</h2><p className="text-xs text-stone-500">{data.incentives?.length||0} records</p></div><div className="divide-y">{data.incentives?.map((item:any)=><div key={item.id} className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{names.get(item.userId)||"Employee"}</p><p className="mt-1 text-sm text-stone-500">Order value {money(item.orderValue)} · {item.percentage}%</p>{item.notes&&<p className="mt-1 text-xs text-stone-500">{item.notes}</p>}</div><div className="text-right"><p className="font-bold text-emerald-700">{money(item.amount)}</p><div className="mt-2"><StatusBadge value={item.status}/></div></div></div>{data.canManage&&<div className="mt-4 flex gap-2"><button onClick={()=>edit(item)} className="btn-secondary">Edit</button><button onClick={()=>remove(item.id)} className="btn-danger btn-sm">Delete</button></div>}</div>)}{!data.incentives?.length&&<div className="p-8 text-center text-sm text-stone-500">No incentives yet. Add the first incentive when an order qualifies.</div>}</div></div></div></>}
+import { api, money, shortDate, toast } from "@/lib/client";
+
+type Stat = { count: number; amount: number };
+type IncentiveRecord = { id: string; orderId: string | null; orderNumber: string | null; amount: number; status: string; notes: string | null; createdAt: string };
+type Employee = { id: string; name: string; role: string; store: string | null; incentiveAmount: number | null; totals: Record<string, Stat>; incentives: IncentiveRecord[] };
+type Data = { employees: Employee[]; canManage: boolean };
+
+export default function IncentivesPage() {
+  const { confirm } = useConfirm();
+  const [data, setData] = useState<Data>({ employees: [], canManage: false });
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try { setData(await api<Data>("/api/incentives")); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function setStatus(id: string, status: string) {
+    setBusyId(id);
+    try { await api(`/api/incentives/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }); toast(`Incentive marked ${status.toLowerCase()}.`); await load(); }
+    catch (caught) { toast((caught as Error).message, "error"); } finally { setBusyId(null); }
+  }
+
+  async function remove(id: string) {
+    if (!(await confirm({ title: "Delete incentive?", message: "This permanently removes the incentive record. This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
+    setBusyId(id);
+    try { await api(`/api/incentives/${id}`, { method: "DELETE" }); toast("Incentive deleted."); await load(); }
+    catch (caught) { toast((caught as Error).message, "error"); } finally { setBusyId(null); }
+  }
+
+  return (
+    <>
+      <PageHeader eyebrow="Payments" title="Incentives" description="Incentives are earned automatically when an employee's order is delivered to the customer on time." />
+      <Hint title="How incentives work">
+        Set a fixed incentive amount on an employee&apos;s profile. When one of their orders ships to the customer on or before its delivery date, a pending incentive is created here for you to approve and mark paid. Employees without an incentive amount aren&apos;t shown.
+      </Hint>
+
+      {loading ? (
+        <div className="card p-8 text-center text-sm text-stone-500">Loading incentives…</div>
+      ) : data.employees.length === 0 ? (
+        <EmptyState
+          icon={<Coins size={22} />}
+          title="No employees set up for incentives"
+          message="Open an employee's profile and set their incentive per on-time order to make them eligible."
+        />
+      ) : (
+        <div className="space-y-5">
+          {data.employees.map((employee) => (
+            <section key={employee.id} className="card overflow-hidden">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-stone-100 p-5">
+                <div>
+                  <Link href={`/employees/${employee.id}`} className="font-semibold text-wine hover:underline">{employee.name}</Link>
+                  <p className="mt-0.5 text-xs text-stone-500">{employee.role.replaceAll("_", " ")}{employee.store ? ` · ${employee.store}` : ""}</p>
+                  <p className="mt-1 text-xs text-stone-400">
+                    {employee.incentiveAmount != null
+                      ? <>Earns <span className="font-semibold text-ink">{money(employee.incentiveAmount)}</span> per on-time delivery.</>
+                      : "No incentive configured — only historical records shown."}
+                  </p>
+                </div>
+                <div className="flex gap-6 text-right">
+                  {(["PENDING", "APPROVED", "PAID"] as const).map((status) => (
+                    <div key={status}>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">{status}</p>
+                      <p className="numeral mt-1 text-lg">{money(employee.totals[status]?.amount ?? 0)}</p>
+                      <p className="text-[11px] text-stone-400">{employee.totals[status]?.count ?? 0} {(employee.totals[status]?.count ?? 0) === 1 ? "entry" : "entries"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {employee.incentives.length === 0 ? (
+                <p className="p-5 text-sm text-stone-400">No incentives earned yet. One is created when an order ships on time.</p>
+              ) : (
+                <div className="divide-y divide-stone-100">
+                  {employee.incentives.map((record) => (
+                    <div key={record.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">
+                          {money(record.amount)}
+                          {record.orderId && record.orderNumber && <Link href={`/orders/${record.orderId}`} className="ml-2 text-xs font-medium text-accent-deep hover:underline">{record.orderNumber}</Link>}
+                        </p>
+                        <p className="text-xs text-stone-500">{shortDate(record.createdAt)}{record.notes ? ` · ${record.notes}` : ""}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge value={record.status} />
+                        {data.canManage && (
+                          <>
+                            {record.status === "PENDING" && <button disabled={busyId === record.id} onClick={() => setStatus(record.id, "APPROVED")} className="btn-secondary btn-sm">Approve</button>}
+                            {record.status === "APPROVED" && <button disabled={busyId === record.id} onClick={() => setStatus(record.id, "PAID")} className="btn-primary btn-sm">Mark paid</button>}
+                            <button disabled={busyId === record.id} onClick={() => remove(record.id)} className="btn-danger btn-sm">Delete</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}

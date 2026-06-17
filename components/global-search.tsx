@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ClipboardList, CornerDownLeft, Package, Search, ShoppingBag, UserPlus, Users, X } from "lucide-react";
@@ -18,7 +19,9 @@ export function GlobalSearch() {
   const router = useRouter();
   const [open, setOpen] = useState(false), [query, setQuery] = useState(""), [groups, setGroups] = useState<Record<string, Result[]>>({}), [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => setMounted(true), []);
   // Flat, ordered list across groups so arrow keys move through every result.
   const flat = Object.entries(groups).flatMap(([label, items]) => items.map((item) => ({ ...item, label })));
 
@@ -65,8 +68,8 @@ export function GlobalSearch() {
       </button>
       <button aria-label="Search Couture OS" onClick={() => setOpen(true)} className="rounded-xl border border-stone-200 p-2.5 md:hidden"><Search size={18} /></button>
 
-      {open && (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center bg-ink/40 px-4 pt-[12vh] animate-fade-in" onMouseDown={(event) => event.currentTarget === event.target && setOpen(false)}>
+      {mounted && open && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-start justify-center bg-ink/40 px-4 pt-[12vh] animate-fade-in" onMouseDown={(event) => event.currentTarget === event.target && setOpen(false)}>
           <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl animate-scale-in">
             {/* Search field */}
             <div className="flex items-center gap-3 border-b border-stone-100 px-4">
@@ -141,7 +144,8 @@ export function GlobalSearch() {
               <span className="flex items-center gap-1.5"><kbd className="rounded border border-stone-200 bg-white px-1.5 py-0.5 font-medium">Esc</kbd> to close</span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
