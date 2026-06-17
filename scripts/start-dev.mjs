@@ -57,7 +57,9 @@ async function cleanup() {
   await unlink(lockPath).catch(() => {});
 }
 
-await rm(distDir, { recursive: true, force: true });
+// Retry the clean: a just-killed Next process can still be writing into
+// .next-dev, which makes a single rmdir fail with ENOTEMPTY/EBUSY.
+await rm(distDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
 console.log(`Cleaned ${distDir}`);
 
 const nextBinary = path.join(process.cwd(), "node_modules", ".bin", "next");
