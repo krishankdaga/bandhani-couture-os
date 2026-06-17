@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Plus, Trash2, X } from "lucide-react";
+import { ArrowRight, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { api, money, shortDate, toast } from "@/lib/client";
@@ -12,8 +12,10 @@ type Order = { id: string; orderNumber: string; orderValue: string; priority: st
 type Meta = { stores: Array<{ id: string; name: string }>; users: Array<{ id: string; name: string; role: string }>; customers: Customer[] };
 type Customer = { id: string; name: string; phone: string; store: { name: string } };
 type CustomMeasurement = { name: string; value: string; notes: string };
+type NewCust = { name: string; phone: string; email: string; address: string; preferences: string };
 
 const PRIORITY_DOT: Record<string, string> = { NORMAL: "bg-stone-300", HIGH: "bg-amber-400", URGENT: "bg-red-500" };
+const NEW_CUST_BLANK: NewCust = { name: "", phone: "", email: "", address: "", preferences: "" };
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -29,6 +31,22 @@ export default function OrdersPage() {
   const [requestingDelete, setRequestingDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [customMeasurements, setCustomMeasurements] = useState<CustomMeasurement[]>([]);
+
+  // Customer combobox
+  const [custSearch, setCustSearch] = useState("");
+  const [selectedCustId, setSelectedCustId] = useState("");
+  const [showCustDrop, setShowCustDrop] = useState(false);
+  const custDropRef = useRef<HTMLDivElement>(null);
+
+  // Quick-create customer
+  const [showNewCust, setShowNewCust] = useState(false);
+  const [newCust, setNewCust] = useState<NewCust>(NEW_CUST_BLANK);
+  const [savingCust, setSavingCust] = useState(false);
+  const [custError, setCustError] = useState("");
+
+  // Track selected store so new-customer call knows which store to assign (owners only;
+  // non-owners get their storeId from the server automatically).
+  const [formStoreId, setFormStoreId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setPageError("");
@@ -47,8 +65,80 @@ export default function OrdersPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (custDropRef.current && !custDropRef.current.contains(e.target as Node)) {
+        setShowCustDrop(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const selectedCust = customers.find((c) => c.id === selectedCustId) ?? null;
+  const filteredCustomers = custSearch.trim()
+    ? customers.filter((c) =>
+        c.name.toLowerCase().includes(custSearch.toLowerCase()) ||
+        c.phone.includes(custSearch)
+      )
+    : customers;
+
+  function selectCustomer(c: Customer) {
+    setSelectedCustId(c.id);
+    setCustSearch("");
+    setShowCustDrop(false);
+  }
+
+  function openNewCust() {
+    setShowCustDrop(false);
+    setShowNewCust(true);
+    setCustError("");
+    // Pre-fill name from whatever the user typed
+    setNewCust({ ...NEW_CUST_BLANK, name: custSearch });
+  }
+
+  function closeNewCust() {
+    setShowNewCust(false);
+    setCustError("");
+    setNewCust(NEW_CUST_BLANK);
+  }
+
+  async function saveNewCustomer() {
+    if (!newCust.name.trim() || !newCust.phone.trim()) {
+      setCustError("Name and phone are required.");
+      return;
+    }
+    setSavingCust(true); setCustError("");
+    try {
+      const result = await api<{ customer: Customer }>("/api/customers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: newCust.name.trim(),
+          phone: newCust.phone.trim(),
+          email: newCust.email.trim() || null,
+          address: newCust.address.trim() || null,
+          preferences: newCust.preferences.trim() || null,
+          storeId: formStoreId || meta.stores[0]?.id || "",
+        }),
+      });
+      const created = result.customer;
+      // Add to list, auto-select
+      setCustomers((prev) => [created, ...prev]);
+      setSelectedCustId(created.id);
+      setCustSearch("");
+      closeNewCust();
+      toast(`Customer ${created.name} created and selected.`);
+    } catch (e) { setCustError((e as Error).message); } finally { setSavingCust(false); }
+  }
+
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setSaving(true);
+    if (!selectedCustId) {
+      setError("Please select or create a customer first.");
+      setSaving(false);
+      return;
+    }
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
     const validCustom = customMeasurements.filter((m) => m.name.trim() && m.value.trim());
@@ -57,6 +147,7 @@ export default function OrdersPage() {
         method: "POST",
         body: JSON.stringify({
           ...values,
+          customerId: selectedCustId,
           customisations: String(values.customisations || "").split(",").map((v) => v.trim()).filter(Boolean),
           referenceImages: String(values.referenceImages || "").split(",").map((v) => v.trim()).filter(Boolean),
           measurements: {
@@ -67,6 +158,9 @@ export default function OrdersPage() {
       });
       setShow(false);
       setCustomMeasurements([]);
+      setSelectedCustId("");
+      setCustSearch("");
+      setFormStoreId("");
       await load();
     } catch (e) { setError((e as Error).message); } finally { setSaving(false); }
   }
@@ -104,18 +198,194 @@ export default function OrdersPage() {
 
   const canWrite = permissions.includes("orders.create");
   const canDelete = permissions.includes("orders.edit");
+  const canCreateCustomer = permissions.includes("customers.create") || companyStatus === "OWNER";
   const isOwner = companyStatus === "OWNER";
 
   return (
     <>
-      <PageHeader title="Order Management" description="Create couture orders and track delivery commitments." action={canWrite ? <button disabled={!customers.length} className="btn-primary" onClick={() => setShow(!show)}>+ New order</button> : undefined} />
+      <PageHeader
+        title="Order Management"
+        description="Create couture orders and track delivery commitments."
+        action={canWrite ? (
+          <button
+            disabled={!customers.length && !canCreateCustomer}
+            className="btn-primary"
+            onClick={() => setShow(!show)}
+          >
+            + New order
+          </button>
+        ) : undefined}
+      />
 
       {show && canWrite && (
         <form onSubmit={create} className="card mb-6 grid gap-4 p-5 md:grid-cols-4">
-          <div><label>Customer</label><select name="customerId" required><option value="">Select</option>{customers.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.phone}</option>)}</select></div>
+
+          {/* ── Customer combobox ── */}
+          <div ref={custDropRef} className="relative">
+            <label>Customer</label>
+            {selectedCust ? (
+              /* Selected state — show name with a clear button */
+              <div className="flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 shadow-sm">
+                <span className="flex-1 truncate text-sm font-medium text-ink">
+                  {selectedCust.name}
+                  <span className="ml-1.5 font-normal text-stone-400">· {selectedCust.phone}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCustId(""); setCustSearch(""); }}
+                  className="ml-1 shrink-0 rounded p-0.5 text-stone-400 hover:text-ink"
+                  aria-label="Clear customer"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              /* Search state */
+              <input
+                type="text"
+                value={custSearch}
+                onChange={(e) => { setCustSearch(e.target.value); setShowCustDrop(true); }}
+                onFocus={() => setShowCustDrop(true)}
+                placeholder="Search by name or phone…"
+                autoComplete="off"
+              />
+            )}
+
+            {/* Dropdown */}
+            {showCustDrop && !selectedCust && (
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-pop">
+                {filteredCustomers.length === 0 && !canCreateCustomer && (
+                  <p className="px-3 py-2.5 text-sm text-stone-400">
+                    No customers found{custSearch ? ` for "${custSearch}"` : ""}.
+                  </p>
+                )}
+                {filteredCustomers.slice(0, 30).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={() => selectCustomer(c)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition hover:bg-stone-50"
+                  >
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-xs text-stone-400">{c.phone} · {c.store.name}</span>
+                  </button>
+                ))}
+                {filteredCustomers.length === 0 && canCreateCustomer && (
+                  <p className="px-3 py-2 text-sm text-stone-400">
+                    No customers found{custSearch ? ` for "${custSearch}"` : ""}.
+                  </p>
+                )}
+                {canCreateCustomer && (
+                  <button
+                    type="button"
+                    onMouseDown={openNewCust}
+                    className="flex w-full items-center gap-2 border-t border-stone-100 px-3 py-2.5 text-sm font-medium text-accent-deep transition hover:bg-accent/5"
+                  >
+                    <UserPlus size={14} />
+                    {custSearch ? `Create "${custSearch}" as new customer` : "Create new customer"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           <div><label>Stylist</label><select name="stylistId" required><option value="">Select</option>{meta.users.filter((v) => v.role === "STYLIST").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
-          <div><label>Store</label><select name="storeId" required><option value="">Select</option>{meta.stores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+          <div>
+            <label>Store</label>
+            <select
+              name="storeId"
+              required
+              value={formStoreId}
+              onChange={(e) => setFormStoreId(e.target.value)}
+            >
+              <option value="">Select</option>
+              {meta.stores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </div>
           <div><label>Order value</label><input name="orderValue" type="number" min="1" required /></div>
+
+          {/* ── Quick-create customer form ── */}
+          {showNewCust && canCreateCustomer && (
+            <div className="md:col-span-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <UserPlus size={15} className="text-accent-deep" />
+                  New customer
+                </div>
+                <button
+                  type="button"
+                  onClick={closeNewCust}
+                  className="rounded-lg p-1 text-stone-400 hover:text-ink"
+                  aria-label="Close"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label>Name <span className="text-red-500">*</span></label>
+                  <input
+                    value={newCust.name}
+                    onChange={(e) => setNewCust((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Priya Sharma"
+                  />
+                </div>
+                <div>
+                  <label>Phone <span className="text-red-500">*</span></label>
+                  <input
+                    value={newCust.phone}
+                    onChange={(e) => setNewCust((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="+91 98765 43210"
+                  />
+                </div>
+                <div>
+                  <label>Email <span className="font-normal text-stone-400">(optional)</span></label>
+                  <input
+                    type="email"
+                    value={newCust.email}
+                    onChange={(e) => setNewCust((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="priya@example.com"
+                  />
+                </div>
+                <div>
+                  <label>Address <span className="font-normal text-stone-400">(optional)</span></label>
+                  <input
+                    value={newCust.address}
+                    onChange={(e) => setNewCust((p) => ({ ...p, address: e.target.value }))}
+                    placeholder="City, locality"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label>Preferences <span className="font-normal text-stone-400">(comma separated, optional)</span></label>
+                  <input
+                    value={newCust.preferences}
+                    onChange={(e) => setNewCust((p) => ({ ...p, preferences: e.target.value }))}
+                    placeholder="e.g. Anarkali, Lehenga, pastels"
+                  />
+                </div>
+              </div>
+              {custError && <div className="mt-3"><InlineMessage message={custError} /></div>}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={saveNewCustomer}
+                  disabled={savingCust}
+                  className="btn-primary btn-sm flex items-center gap-1.5"
+                >
+                  {savingCust ? "Saving…" : <><UserPlus size={13} />Save customer</>}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeNewCust}
+                  disabled={savingCust}
+                  className="btn-secondary btn-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label>{l}</label><input name={n} required placeholder="inches" /></div>)}
           <div className="md:col-span-4">
             <div className="flex items-center justify-between"><label className="mb-0">Custom measurements</label><button type="button" onClick={addCustomMeasurement} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button></div>
@@ -135,7 +405,12 @@ export default function OrdersPage() {
           {error && <div className="md:col-span-4"><InlineMessage message={error} /></div>}
           <div className="flex gap-2 md:col-span-4">
             <button disabled={saving} className="btn-primary">{saving ? "Creating..." : "Create order"}</button>
-            <button disabled={saving} type="button" className="btn-secondary" onClick={() => setShow(false)}>Cancel</button>
+            <button disabled={saving} type="button" className="btn-secondary" onClick={() => {
+              setShow(false);
+              setSelectedCustId(""); setCustSearch(""); setShowCustDrop(false);
+              setShowNewCust(false); setNewCust(NEW_CUST_BLANK); setCustError("");
+              setCustomMeasurements([]); setFormStoreId("");
+            }}>Cancel</button>
           </div>
         </form>
       )}
