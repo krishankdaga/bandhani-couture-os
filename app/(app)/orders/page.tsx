@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, ClipboardList, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { SearchInput } from "@/components/ui";
 import { api, money, shortDate, toast } from "@/lib/client";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -33,6 +34,11 @@ export default function OrdersPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [customMeasurements, setCustomMeasurements] = useState<CustomMeasurement[]>([]);
   const { confirm } = useConfirm();
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [delayFilter, setDelayFilter] = useState("ALL");
 
   // Customer combobox
   const [custSearch, setCustSearch] = useState("");
@@ -202,6 +208,17 @@ export default function OrdersPage() {
   const canDelete = permissions.includes("orders.edit");
   const canCreateCustomer = permissions.includes("customers.create") || companyStatus === "OWNER";
   const isOwner = companyStatus === "OWNER";
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return orders.filter((o) =>
+      (statusFilter === "ALL" || o.status === statusFilter) &&
+      (delayFilter === "ALL" || o.delayState === delayFilter) &&
+      (!q || `${o.orderNumber} ${o.customer.name} ${o.customer.phone} ${o.stylist.name}`.toLowerCase().includes(q)),
+    );
+  }, [orders, search, statusFilter, delayFilter]);
+  const filtersActive = search.trim() !== "" || statusFilter !== "ALL" || delayFilter !== "ALL";
+  function clearFilters() { setSearch(""); setStatusFilter("ALL"); setDelayFilter("ALL"); }
 
   return (
     <>
@@ -419,12 +436,39 @@ export default function OrdersPage() {
 
       {pageError && <div className="mb-4"><ErrorState message={pageError} retry={load} /></div>}
 
+      {!loading && orders.length > 0 && (
+        <section className="card mb-6 p-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search order, customer, phone or stylist" />
+            <select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="ALL">All statuses</option>
+              {["DRAFT", "CONFIRMED", "IN_PRODUCTION", "READY", "DELIVERED", "CANCELLED"].map((s) => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}
+            </select>
+            <select aria-label="Filter by delivery health" value={delayFilter} onChange={(e) => setDelayFilter(e.target.value)}>
+              <option value="ALL">All delivery health</option>
+              <option value="GREEN">On track</option>
+              <option value="YELLOW">At risk</option>
+              <option value="RED">Delayed</option>
+            </select>
+            <button type="button" onClick={clearFilters} disabled={!filtersActive} className="btn-ghost btn-sm whitespace-nowrap">Clear filters</button>
+          </div>
+          <p className="mt-3 text-xs text-stone-500">{filtered.length} of {orders.length} order{orders.length === 1 ? "" : "s"}{filtersActive ? " match these filters" : ""}.</p>
+        </section>
+      )}
+
       {loading ? <LoadingState label="Loading orders..." /> : !orders.length ? (
         <EmptyState
           icon={<ClipboardList size={22} />}
           title={canWrite ? "No orders yet" : "Nothing assigned to you"}
           message={canWrite ? "Create your first couture order to start tracking measurements, materials and delivery." : "No orders are assigned to your store or current access yet."}
           action={canWrite ? <button className="btn-primary" onClick={() => setShow(true)}>+ New order</button> : undefined}
+        />
+      ) : !filtered.length ? (
+        <EmptyState
+          icon={<ClipboardList size={22} />}
+          title="No matching orders"
+          message="No orders match these filters. Clear them to see every order."
+          action={<button className="btn-secondary" onClick={clearFilters}>Clear filters</button>}
         />
       ) : (
         <div className="card overflow-hidden">
@@ -442,7 +486,7 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {orders.map((o) => (
+              {filtered.map((o) => (
                 <tr key={o.id} className="group">
                   <td className="px-5 py-3">
                     <Link href={`/orders/${o.id}`} className="flex items-center gap-2 hover:text-wine">
