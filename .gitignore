@@ -11,3 +11,8 @@ coverage
 .DS_Store
 .claude
 *.zip
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/

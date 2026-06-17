@@ -192,7 +192,7 @@ export default function ReportsPage() {
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map(([label, value]) => (
-          <div key={label} className="card p-5"><p className="text-xs font-bold uppercase tracking-wide text-stone-400">{label}</p><p className="mt-3 text-3xl font-semibold">{value}</p></div>
+          <div key={label} className="card p-5"><span className="hairline-gold mb-3" /><p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">{label}</p><p className="numeral mt-2 text-3xl text-ink">{value}</p></div>
         ))}
       </div>
 
@@ -224,10 +224,10 @@ export default function ReportsPage() {
         <section className="card mb-5 p-5">
           <h2 className="font-semibold">Sales</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div><p className="text-xs text-stone-400">Revenue booked</p><p className="mt-1 text-2xl font-semibold">{money(analytics.sales.totalRevenue)}</p></div>
-            <div><p className="text-xs text-stone-400">Collected</p><p className="mt-1 text-2xl font-semibold text-emerald-700">{money(analytics.sales.totalCollected)}</p></div>
-            <div><p className="text-xs text-stone-400">Outstanding</p><p className={`mt-1 text-2xl font-semibold ${analytics.sales.outstanding > 0 ? "text-wine" : "text-emerald-700"}`}>{money(analytics.sales.outstanding)}</p></div>
-            <div><p className="text-xs text-stone-400">Avg order value</p><p className="mt-1 text-2xl font-semibold">{money(analytics.sales.averageOrderValue)}</p></div>
+            <div><p className="text-xs text-stone-400">Revenue booked</p><p className="mt-1 numeral text-2xl">{money(analytics.sales.totalRevenue)}</p></div>
+            <div><p className="text-xs text-stone-400">Collected</p><p className="mt-1 numeral text-2xl text-emerald-700">{money(analytics.sales.totalCollected)}</p></div>
+            <div><p className="text-xs text-stone-400">Outstanding</p><p className={`mt-1 numeral text-2xl ${analytics.sales.outstanding > 0 ? "text-wine" : "text-emerald-700"}`}>{money(analytics.sales.outstanding)}</p></div>
+            <div><p className="text-xs text-stone-400">Avg order value</p><p className="mt-1 numeral text-2xl">{money(analytics.sales.averageOrderValue)}</p></div>
           </div>
           {analytics.sales.byMonth.length > 0 && (
             <div className="mt-5 space-y-2">
@@ -247,9 +247,9 @@ export default function ReportsPage() {
         <section className="card mb-5 p-5">
           <h2 className="font-semibold">Lead conversion</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <div><p className="text-xs text-stone-400">Leads in range</p><p className="mt-1 text-2xl font-semibold">{analytics.leads.total}</p></div>
-            <div><p className="text-xs text-stone-400">Converted</p><p className="mt-1 text-2xl font-semibold text-emerald-700">{analytics.leads.converted}</p></div>
-            <div><p className="text-xs text-stone-400">Conversion rate</p><p className="mt-1 text-2xl font-semibold">{analytics.leads.conversionRate}%</p></div>
+            <div><p className="text-xs text-stone-400">Leads in range</p><p className="mt-1 numeral text-2xl">{analytics.leads.total}</p></div>
+            <div><p className="text-xs text-stone-400">Converted</p><p className="mt-1 numeral text-2xl text-emerald-700">{analytics.leads.converted}</p></div>
+            <div><p className="text-xs text-stone-400">Conversion rate</p><p className="mt-1 numeral text-2xl">{analytics.leads.conversionRate}%</p></div>
           </div>
           {analytics.leads.bySource.length > 0 && (
             <div className="mt-5 table-wrap"><table><thead><tr><th>Source</th><th>Leads</th><th>Converted</th><th>Rate</th></tr></thead><tbody>
@@ -262,9 +262,9 @@ export default function ReportsPage() {
         <section className="card p-5">
           <h2 className="font-semibold">Inventory</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <div><p className="text-xs text-stone-400">Stock value (at cost)</p><p className="mt-1 text-2xl font-semibold">{money(analytics.inventory.stockValue)}</p></div>
-            <div><p className="text-xs text-stone-400">Items tracked</p><p className="mt-1 text-2xl font-semibold">{analytics.inventory.itemCount}</p></div>
-            <div><p className="text-xs text-stone-400">Items short</p><p className={`mt-1 text-2xl font-semibold ${analytics.inventory.shortageItems > 0 ? "text-amber-700" : "text-emerald-700"}`}>{analytics.inventory.shortageItems}</p></div>
+            <div><p className="text-xs text-stone-400">Stock value (at cost)</p><p className="mt-1 numeral text-2xl">{money(analytics.inventory.stockValue)}</p></div>
+            <div><p className="text-xs text-stone-400">Items tracked</p><p className="mt-1 numeral text-2xl">{analytics.inventory.itemCount}</p></div>
+            <div><p className="text-xs text-stone-400">Items short</p><p className={`mt-1 numeral text-2xl ${analytics.inventory.shortageItems > 0 ? "text-amber-700" : "text-emerald-700"}`}>{analytics.inventory.shortageItems}</p></div>
           </div>
         </section>
       </>}

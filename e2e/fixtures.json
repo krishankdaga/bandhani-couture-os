@@ -1,0 +1,22 @@
+{
+  "owner": {
+    "id": "cmqetl9qw00020ostu0evmm6f",
+    "email": "owner@cbos.local",
+    "storeId": "cmqetl9qq00000ostkfrg60fp"
+  },
+  "manager": {
+    "id": "cmqetl9qz00060ost1ktqlt6t",
+    "email": "manager@cbos.local",
+    "storeId": "cmqetl9qq00000ostkfrg60fp"
+  },
+  "employee": {
+    "id": "cmqgw5asp000h0o7ftstc7tg6",
+    "email": "employee@cbos.local",
+    "storeId": "cmqetl9qq00000ostkfrg60fp"
+  },
+  "stylist": {
+    "id": "cmqetl9r000080ostrvz8x75w",
+    "email": "stylist@cbos.local",
+    "storeId": "cmqetl9qq00000ostkfrg60fp"
+  }
+}

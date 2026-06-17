@@ -10,6 +10,8 @@ const allocateSchema = z.object({
   inventoryItemId: z.string().min(1, "Choose an inventory item"),
   requiredQty: z.coerce.number().positive("Quantity must be greater than zero").max(99_999_999),
   note: z.string().max(300).optional().nullable(),
+  dyeColour: z.string().max(100).optional().nullable(),
+  dyeInstructions: z.string().max(500).optional().nullable(),
   allowShortage: z.boolean().optional().default(false),
 });
 
@@ -38,16 +40,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const standing = stockStanding(material.inventoryItem);
     const required = Number(material.requiredQty);
     const consumed = Number(material.consumedQty);
+    const costPrice = Number(material.inventoryItem.costPrice ?? 0);
     return {
       id: material.id,
       inventoryItemId: material.inventoryItemId,
       sku: material.inventoryItem.sku,
       name: material.inventoryItem.name,
       unit: material.inventoryItem.unit,
+      category: material.inventoryItem.category,
       requiredQty: required,
       consumedQty: consumed,
       remainingQty: Math.max(0, required - consumed),
+      // Cost accounting: unit cost from inventory, committed (allocated) vs used (consumed).
+      costPrice,
+      committedCost: required * costPrice,
+      consumedCost: consumed * costPrice,
       note: material.note,
+      dyeColour: material.dyeColour,
+      dyeInstructions: material.dyeInstructions,
       createdBy: material.createdBy?.name ?? null,
       // Item-wide stock context so the UI can warn about shortages.
       itemOnHand: standing.onHand,
@@ -97,9 +107,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         throw new BusinessError(`Only ${availableToThisOrder} ${item.unit} available. Enable "allocate despite shortage" to reserve anyway.`);
       }
 
+      const dyeFields = {
+        ...(data.dyeColour !== undefined && { dyeColour: data.dyeColour || null }),
+        ...(data.dyeInstructions !== undefined && { dyeInstructions: data.dyeInstructions || null }),
+      };
       const material = existing
-        ? await tx.orderMaterial.update({ where: { id: existing.id }, data: { requiredQty: data.requiredQty, note: data.note ?? existing.note } })
-        : await tx.orderMaterial.create({ data: { orderId: id, inventoryItemId: data.inventoryItemId, requiredQty: data.requiredQty, note: data.note || null, createdById: user.id } });
+        ? await tx.orderMaterial.update({ where: { id: existing.id }, data: { requiredQty: data.requiredQty, note: data.note ?? existing.note, ...dyeFields } })
+        : await tx.orderMaterial.create({ data: { orderId: id, inventoryItemId: data.inventoryItemId, requiredQty: data.requiredQty, note: data.note || null, createdById: user.id, ...dyeFields } });
 
       await writeAudit(tx, {
         userId: user.id,

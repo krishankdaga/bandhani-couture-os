@@ -1,18 +1,24 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Trash2 } from "lucide-react";
+import { ArrowRight, ClipboardList, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { SearchInput } from "@/components/ui";
 import { api, money, shortDate, toast } from "@/lib/client";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
+import { useConfirm } from "@/components/confirm-dialog";
+import { Drawer } from "@/components/drawer";
 
 type Order = { id: string; orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string; customer: { name: string; phone: string }; stylist: { name: string }; stages: Array<{ status: string }> };
 type Meta = { stores: Array<{ id: string; name: string }>; users: Array<{ id: string; name: string; role: string }>; customers: Customer[] };
 type Customer = { id: string; name: string; phone: string; store: { name: string } };
+type CustomMeasurement = { name: string; value: string; notes: string };
+type NewCust = { name: string; phone: string; email: string; address: string; preferences: string };
 
 const PRIORITY_DOT: Record<string, string> = { NORMAL: "bg-stone-300", HIGH: "bg-amber-400", URGENT: "bg-red-500" };
+const NEW_CUST_BLANK: NewCust = { name: "", phone: "", email: "", address: "", preferences: "" };
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -27,6 +33,29 @@ export default function OrdersPage() {
   const [companyStatus, setCompanyStatus] = useState("");
   const [requestingDelete, setRequestingDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [customMeasurements, setCustomMeasurements] = useState<CustomMeasurement[]>([]);
+  const { confirm } = useConfirm();
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [delayFilter, setDelayFilter] = useState("ALL");
+
+  // Customer combobox
+  const [custSearch, setCustSearch] = useState("");
+  const [selectedCustId, setSelectedCustId] = useState("");
+  const [showCustDrop, setShowCustDrop] = useState(false);
+  const custDropRef = useRef<HTMLDivElement>(null);
+
+  // Quick-create customer
+  const [showNewCust, setShowNewCust] = useState(false);
+  const [newCust, setNewCust] = useState<NewCust>(NEW_CUST_BLANK);
+  const [savingCust, setSavingCust] = useState(false);
+  const [custError, setCustError] = useState("");
+
+  // Track selected store so new-customer call knows which store to assign (owners only;
+  // non-owners get their storeId from the server automatically).
+  const [formStoreId, setFormStoreId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setPageError("");
@@ -45,22 +74,120 @@ export default function OrdersPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (custDropRef.current && !custDropRef.current.contains(e.target as Node)) {
+        setShowCustDrop(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const selectedCust = customers.find((c) => c.id === selectedCustId) ?? null;
+  const filteredCustomers = custSearch.trim()
+    ? customers.filter((c) =>
+        c.name.toLowerCase().includes(custSearch.toLowerCase()) ||
+        c.phone.includes(custSearch)
+      )
+    : customers;
+
+  function selectCustomer(c: Customer) {
+    setSelectedCustId(c.id);
+    setCustSearch("");
+    setShowCustDrop(false);
+  }
+
+  function openNewCust() {
+    setShowCustDrop(false);
+    setShowNewCust(true);
+    setCustError("");
+    // Pre-fill name from whatever the user typed
+    setNewCust({ ...NEW_CUST_BLANK, name: custSearch });
+  }
+
+  function closeNewCust() {
+    setShowNewCust(false);
+    setCustError("");
+    setNewCust(NEW_CUST_BLANK);
+  }
+
+  async function saveNewCustomer() {
+    if (!newCust.name.trim() || !newCust.phone.trim()) {
+      setCustError("Name and phone are required.");
+      return;
+    }
+    setSavingCust(true); setCustError("");
+    try {
+      const result = await api<{ customer: Customer }>("/api/customers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: newCust.name.trim(),
+          phone: newCust.phone.trim(),
+          email: newCust.email.trim() || null,
+          address: newCust.address.trim() || null,
+          preferences: newCust.preferences.trim() || null,
+          storeId: formStoreId || meta.stores[0]?.id || "",
+        }),
+      });
+      const created = result.customer;
+      // Add to list, auto-select
+      setCustomers((prev) => [created, ...prev]);
+      setSelectedCustId(created.id);
+      setCustSearch("");
+      closeNewCust();
+      toast(`Customer ${created.name} created and selected.`);
+    } catch (e) { setCustError((e as Error).message); } finally { setSavingCust(false); }
+  }
+
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setSaving(true);
+    if (!selectedCustId) {
+      setError("Please select or create a customer first.");
+      setSaving(false);
+      return;
+    }
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
+    const validCustom = customMeasurements.filter((m) => m.name.trim() && m.value.trim());
     try {
       await api("/api/orders", {
         method: "POST",
-        body: JSON.stringify({ ...values, customisations: String(values.customisations || "").split(",").map((v) => v.trim()).filter(Boolean), referenceImages: String(values.referenceImages || "").split(",").map((v) => v.trim()).filter(Boolean), measurements: { bust: values.bust, waist: values.waist, hip: values.hip, length: values.length } }),
+        body: JSON.stringify({
+          ...values,
+          customerId: selectedCustId,
+          customisations: String(values.customisations || "").split(",").map((v) => v.trim()).filter(Boolean),
+          referenceImages: String(values.referenceImages || "").split(",").map((v) => v.trim()).filter(Boolean),
+          measurements: {
+            bust: values.bust, waist: values.waist, hip: values.hip, length: values.length,
+            _custom: validCustom.map((m) => ({ name: m.name.trim(), value: m.value.trim(), notes: m.notes.trim() || undefined })),
+          },
+        }),
       });
       setShow(false);
+      setCustomMeasurements([]);
+      setSelectedCustId("");
+      setCustSearch("");
+      setFormStoreId("");
       await load();
     } catch (e) { setError((e as Error).message); } finally { setSaving(false); }
   }
 
+  function addCustomMeasurement() {
+    setCustomMeasurements((prev) => [...prev, { name: "", value: "", notes: "" }]);
+  }
+
+  function updateCustomMeasurement(index: number, field: keyof CustomMeasurement, val: string) {
+    setCustomMeasurements((prev) => prev.map((m, i) => i === index ? { ...m, [field]: val } : m));
+  }
+
+  function removeCustomMeasurement(index: number) {
+    setCustomMeasurements((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function requestDelete(order: Order) {
-    if (!confirm(`Send a deletion request for ${order.orderNumber} to the owner?`)) return;
+    if (!(await confirm({ title: "Request deletion?", message: `The owner will be asked to approve deleting ${order.orderNumber}.`, confirmLabel: "Send request" }))) return;
     setRequestingDelete(order.id);
     try {
       await api(`/api/orders/${order.id}/request-delete`, { method: "POST" });
@@ -69,7 +196,7 @@ export default function OrdersPage() {
   }
 
   async function deleteOrder(order: Order) {
-    if (!confirm(`Permanently delete ${order.orderNumber}? This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete ${order.orderNumber}?`, message: "This permanently removes the order and all its payments, materials and production stages. This cannot be undone.", confirmLabel: "Delete order", tone: "danger" }))) return;
     setDeletingId(order.id);
     try {
       await api(`/api/orders/${order.id}`, { method: "DELETE" });
@@ -80,35 +207,274 @@ export default function OrdersPage() {
 
   const canWrite = permissions.includes("orders.create");
   const canDelete = permissions.includes("orders.edit");
+  const canCreateCustomer = permissions.includes("customers.create") || companyStatus === "OWNER";
   const isOwner = companyStatus === "OWNER";
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return orders.filter((o) =>
+      (statusFilter === "ALL" || o.status === statusFilter) &&
+      (delayFilter === "ALL" || o.delayState === delayFilter) &&
+      (!q || `${o.orderNumber} ${o.customer.name} ${o.customer.phone} ${o.stylist.name}`.toLowerCase().includes(q)),
+    );
+  }, [orders, search, statusFilter, delayFilter]);
+  const filtersActive = search.trim() !== "" || statusFilter !== "ALL" || delayFilter !== "ALL";
+  function clearFilters() { setSearch(""); setStatusFilter("ALL"); setDelayFilter("ALL"); }
+  function resetCreateForm() {
+    setShow(false);
+    setSelectedCustId(""); setCustSearch(""); setShowCustDrop(false);
+    setShowNewCust(false); setNewCust(NEW_CUST_BLANK); setCustError("");
+    setCustomMeasurements([]); setFormStoreId(""); setError("");
+  }
 
   return (
     <>
-      <PageHeader title="Order Management" description="Create couture orders and track delivery commitments." action={canWrite ? <button disabled={!customers.length} className="btn-primary" onClick={() => setShow(!show)}>+ New order</button> : undefined} />
+      <PageHeader
+        title="Order Management"
+        description="Create couture orders and track delivery commitments."
+        action={canWrite ? (
+          <button
+            disabled={!customers.length && !canCreateCustomer}
+            className="btn-primary"
+            onClick={() => setShow(!show)}
+          >
+            + New order
+          </button>
+        ) : undefined}
+      />
 
-      {show && canWrite && (
-        <form onSubmit={create} className="card mb-6 grid gap-4 p-5 md:grid-cols-4">
-          <div><label>Customer</label><select name="customerId" required><option value="">Select</option>{customers.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.phone}</option>)}</select></div>
+      <Drawer
+        open={show && canWrite}
+        onClose={resetCreateForm}
+        title="New order"
+        description="Create a couture order, pick or add the customer, and capture measurements."
+        width="max-w-3xl"
+        footer={<div className="flex justify-end gap-2"><button type="button" disabled={saving} className="btn-secondary" onClick={resetCreateForm}>Cancel</button><button form="order-form" disabled={saving} className="btn-primary">{saving ? "Creating..." : "Create order"}</button></div>}
+      >
+        <form id="order-form" onSubmit={create} className="grid gap-4 sm:grid-cols-2">
+
+          {/* ── Customer combobox ── */}
+          <div ref={custDropRef} className="relative">
+            <label>Customer</label>
+            {selectedCust ? (
+              /* Selected state — show name with a clear button */
+              <div className="flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 shadow-sm">
+                <span className="flex-1 truncate text-sm font-medium text-ink">
+                  {selectedCust.name}
+                  <span className="ml-1.5 font-normal text-stone-400">· {selectedCust.phone}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCustId(""); setCustSearch(""); }}
+                  className="ml-1 shrink-0 rounded p-0.5 text-stone-400 hover:text-ink"
+                  aria-label="Clear customer"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              /* Search state */
+              <input
+                type="text"
+                value={custSearch}
+                onChange={(e) => { setCustSearch(e.target.value); setShowCustDrop(true); }}
+                onFocus={() => setShowCustDrop(true)}
+                placeholder="Search by name or phone…"
+                autoComplete="off"
+              />
+            )}
+
+            {/* Dropdown */}
+            {showCustDrop && !selectedCust && (
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-pop">
+                {filteredCustomers.length === 0 && !canCreateCustomer && (
+                  <p className="px-3 py-2.5 text-sm text-stone-400">
+                    No customers found{custSearch ? ` for "${custSearch}"` : ""}.
+                  </p>
+                )}
+                {filteredCustomers.slice(0, 30).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={() => selectCustomer(c)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition hover:bg-stone-50"
+                  >
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-xs text-stone-400">{c.phone} · {c.store.name}</span>
+                  </button>
+                ))}
+                {filteredCustomers.length === 0 && canCreateCustomer && (
+                  <p className="px-3 py-2 text-sm text-stone-400">
+                    No customers found{custSearch ? ` for "${custSearch}"` : ""}.
+                  </p>
+                )}
+                {canCreateCustomer && (
+                  <button
+                    type="button"
+                    onMouseDown={openNewCust}
+                    className="flex w-full items-center gap-2 border-t border-stone-100 px-3 py-2.5 text-sm font-medium text-accent-deep transition hover:bg-accent/5"
+                  >
+                    <UserPlus size={14} />
+                    {custSearch ? `Create "${custSearch}" as new customer` : "Create new customer"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           <div><label>Stylist</label><select name="stylistId" required><option value="">Select</option>{meta.users.filter((v) => v.role === "STYLIST").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
-          <div><label>Store</label><select name="storeId" required><option value="">Select</option>{meta.stores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+          <div>
+            <label>Store</label>
+            <select
+              name="storeId"
+              required
+              value={formStoreId}
+              onChange={(e) => setFormStoreId(e.target.value)}
+            >
+              <option value="">Select</option>
+              {meta.stores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </div>
           <div><label>Order value</label><input name="orderValue" type="number" min="1" required /></div>
+
+          {/* ── Quick-create customer form ── */}
+          {showNewCust && canCreateCustomer && (
+            <div className="sm:col-span-2 rounded-xl border border-accent/30 bg-accent/5 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <UserPlus size={15} className="text-accent-deep" />
+                  New customer
+                </div>
+                <button
+                  type="button"
+                  onClick={closeNewCust}
+                  className="rounded-lg p-1 text-stone-400 hover:text-ink"
+                  aria-label="Close"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label>Name <span className="text-red-500">*</span></label>
+                  <input
+                    value={newCust.name}
+                    onChange={(e) => setNewCust((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Priya Sharma"
+                  />
+                </div>
+                <div>
+                  <label>Phone <span className="text-red-500">*</span></label>
+                  <input
+                    value={newCust.phone}
+                    onChange={(e) => setNewCust((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="+91 98765 43210"
+                  />
+                </div>
+                <div>
+                  <label>Email <span className="font-normal text-stone-400">(optional)</span></label>
+                  <input
+                    type="email"
+                    value={newCust.email}
+                    onChange={(e) => setNewCust((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="priya@example.com"
+                  />
+                </div>
+                <div>
+                  <label>Address <span className="font-normal text-stone-400">(optional)</span></label>
+                  <input
+                    value={newCust.address}
+                    onChange={(e) => setNewCust((p) => ({ ...p, address: e.target.value }))}
+                    placeholder="City, locality"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label>Preferences <span className="font-normal text-stone-400">(comma separated, optional)</span></label>
+                  <input
+                    value={newCust.preferences}
+                    onChange={(e) => setNewCust((p) => ({ ...p, preferences: e.target.value }))}
+                    placeholder="e.g. Anarkali, Lehenga, pastels"
+                  />
+                </div>
+              </div>
+              {custError && <div className="mt-3"><InlineMessage message={custError} /></div>}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={saveNewCustomer}
+                  disabled={savingCust}
+                  className="btn-primary btn-sm flex items-center gap-1.5"
+                >
+                  {savingCust ? "Saving…" : <><UserPlus size={13} />Save customer</>}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeNewCust}
+                  disabled={savingCust}
+                  className="btn-secondary btn-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label>{l}</label><input name={n} required placeholder="inches" /></div>)}
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between"><label className="mb-0">Custom measurements</label><button type="button" onClick={addCustomMeasurement} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button></div>
+            {customMeasurements.map((cm, i) => (
+              <div key={i} className="mt-2 grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-4"><label className="text-xs">Name</label><input value={cm.name} onChange={(e) => updateCustomMeasurement(i, "name", e.target.value)} placeholder="e.g. Shoulder Drop" /></div>
+                <div className="col-span-3"><label className="text-xs">Value</label><input value={cm.value} onChange={(e) => updateCustomMeasurement(i, "value", e.target.value)} placeholder="inches" /></div>
+                <div className="col-span-4"><label className="text-xs">Notes (optional)</label><input value={cm.notes} onChange={(e) => updateCustomMeasurement(i, "notes", e.target.value)} placeholder="e.g. at booking" /></div>
+                <div className="col-span-1 flex justify-end pb-0.5"><button type="button" onClick={() => removeCustomMeasurement(i)} className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600"><X size={14} /></button></div>
+              </div>
+            ))}
+          </div>
           <div><label>Priority</label><select name="priority"><option>NORMAL</option><option>HIGH</option><option>URGENT</option></select></div>
           <div><label>Delivery date</label><input name="deliveryDate" type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} required /></div>
-          <div className="md:col-span-2"><label>Customisations (comma separated)</label><input name="customisations" /></div>
-          <div className="md:col-span-4"><label>Reference image URLs (comma separated)</label><input name="referenceImages" placeholder="https://example.com/reference.jpg" /></div>
-          {error && <div className="md:col-span-4"><InlineMessage message={error} /></div>}
-          <div className="flex gap-2 md:col-span-4">
-            <button disabled={saving} className="btn-primary">{saving ? "Creating..." : "Create order"}</button>
-            <button disabled={saving} type="button" className="btn-secondary" onClick={() => setShow(false)}>Cancel</button>
-          </div>
+          <div className="sm:col-span-2"><label>Customisations (comma separated)</label><input name="customisations" /></div>
+          <div className="sm:col-span-2"><label>Reference image URLs (comma separated)</label><input name="referenceImages" placeholder="https://example.com/reference.jpg" /></div>
+          {error && <div className="sm:col-span-2"><InlineMessage message={error} /></div>}
         </form>
-      )}
+      </Drawer>
 
       {pageError && <div className="mb-4"><ErrorState message={pageError} retry={load} /></div>}
 
+      {!loading && orders.length > 0 && (
+        <section className="card mb-6 p-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search order, customer, phone or stylist" />
+            <select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="ALL">All statuses</option>
+              {["DRAFT", "CONFIRMED", "IN_PRODUCTION", "READY", "DELIVERED", "CANCELLED"].map((s) => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}
+            </select>
+            <select aria-label="Filter by delivery health" value={delayFilter} onChange={(e) => setDelayFilter(e.target.value)}>
+              <option value="ALL">All delivery health</option>
+              <option value="GREEN">On track</option>
+              <option value="YELLOW">At risk</option>
+              <option value="RED">Delayed</option>
+            </select>
+            <button type="button" onClick={clearFilters} disabled={!filtersActive} className="btn-ghost btn-sm whitespace-nowrap">Clear filters</button>
+          </div>
+          <p className="mt-3 text-xs text-stone-500">{filtered.length} of {orders.length} order{orders.length === 1 ? "" : "s"}{filtersActive ? " match these filters" : ""}.</p>
+        </section>
+      )}
+
       {loading ? <LoadingState label="Loading orders..." /> : !orders.length ? (
-        <EmptyState message={canWrite ? "No orders yet. Create an order for an existing customer." : "No orders are assigned to your store or current access."} />
+        <EmptyState
+          icon={<ClipboardList size={22} />}
+          title={canWrite ? "No orders yet" : "Nothing assigned to you"}
+          message={canWrite ? "Create your first couture order to start tracking measurements, materials and delivery." : "No orders are assigned to your store or current access yet."}
+          action={canWrite ? <button className="btn-primary" onClick={() => setShow(true)}>+ New order</button> : undefined}
+        />
+      ) : !filtered.length ? (
+        <EmptyState
+          icon={<ClipboardList size={22} />}
+          title="No matching orders"
+          message="No orders match these filters. Clear them to see every order."
+          action={<button className="btn-secondary" onClick={clearFilters}>Clear filters</button>}
+        />
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full">
@@ -125,7 +491,7 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {orders.map((o) => (
+              {filtered.map((o) => (
                 <tr key={o.id} className="group">
                   <td className="px-5 py-3">
                     <Link href={`/orders/${o.id}`} className="flex items-center gap-2 hover:text-wine">

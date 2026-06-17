@@ -38,12 +38,21 @@ const statusTone: Record<string, Tone> = {
   ACTIVE: "success", INACTIVE: "danger",
 };
 
+// Human-readable labels for values whose enum name is not what a user should read.
+// Delay states are stored as colours internally but always shown by their meaning.
+export const statusLabel: Record<string, string> = {
+  GREEN: "On track",
+  YELLOW: "At risk",
+  RED: "Delayed",
+};
+
 export function StatusBadge({ value, dot = true }: { value: string; dot?: boolean }) {
   const tone = statusTone[value] ?? "neutral";
+  const label = statusLabel[value] ?? value.replaceAll("_", " ");
   return (
     <span className={`badge ${toneClasses[tone]}`}>
       {dot && <span className={`h-1.5 w-1.5 rounded-full ${toneDot[tone]}`} />}
-      {value.replaceAll("_", " ")}
+      {label}
     </span>
   );
 }

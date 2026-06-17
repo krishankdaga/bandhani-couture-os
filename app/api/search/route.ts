@@ -1,6 +1,7 @@
 import { InventoryCategory, LeadSource, LeadStatus, OrderStatus, PurchaseStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { isApiError, requireUser } from "@/lib/api";
+import { DELAY_STATE_LABELS } from "@/lib/delay";
 import { hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { optionalStoreScope, storeScope } from "@/lib/scope";
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ query: q, generatedAt: new Date(), groups: {
     Customers: customers.map((item) => ({ id: item.id, title: item.name, subtitle: [item.phone, item.email, item.address].filter(Boolean).join(" · "), href: `/customers/${item.id}` })),
     Leads: leads.map((item) => ({ id: item.id, title: item.name, subtitle: `${item.phone} · ${item.status.replaceAll("_", " ")} · ${item.source.replaceAll("_", " ")}`, href: `/leads?search=${encodeURIComponent(item.phone)}` })),
-    Orders: orders.map((item) => ({ id: item.id, title: item.orderNumber, subtitle: `${item.customer.name} · ${item.status.replaceAll("_", " ")} · ${item.delayState}`, href: `/orders?search=${encodeURIComponent(item.orderNumber)}` })),
+    Orders: orders.map((item) => ({ id: item.id, title: item.orderNumber, subtitle: `${item.customer.name} · ${item.status.replaceAll("_", " ")} · ${DELAY_STATE_LABELS[item.delayState]}`, href: `/orders?search=${encodeURIComponent(item.orderNumber)}` })),
     Inventory: inventory.map((item) => ({ id: item.id, title: `${item.sku} · ${item.name}`, subtitle: `${item.category.replaceAll("_", " ")} · ${item.quantity} ${item.unit}`, href: `/inventory?search=${encodeURIComponent(item.sku)}` })),
     Purchases: purchases.map((item) => ({ id: item.id, title: item.purchaseNo, subtitle: `${item.vendorName} · ${item.status.replaceAll("_", " ")}`, href: `/purchases?search=${encodeURIComponent(item.purchaseNo)}` })),
   } });

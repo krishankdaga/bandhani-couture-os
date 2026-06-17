@@ -2,16 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertTriangle, CreditCard, IndianRupee, Package, Pencil, Plus, Save, Scissors, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, CreditCard, FileText, IndianRupee, Package, Pencil, Plus, Ruler, Save, Scissors, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { api, money, shortDate, toast } from "@/lib/client";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type Stage = {
   id: string; type: string; sequence: number; status: string; delayState: string;
   dueDate: string; startDate: string | null; completionDate: string | null;
-  vendorName: string | null; remarks: string | null; owner: { name: string } | null;
+  vendorName: string | null; remarks: string | null; cost: string | number; owner: { name: string } | null;
 };
 type Order = {
   orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string;
@@ -21,12 +22,33 @@ type Order = {
 };
 type Payment = { id: string; amount: string; method: string; kind: string; note: string | null; paidAt: string; recordedBy: { name: string } | null };
 type Material = {
-  id: string; inventoryItemId: string; sku: string; name: string; unit: string;
+  id: string; inventoryItemId: string; sku: string; name: string; unit: string; category: string;
   requiredQty: number; consumedQty: number; remainingQty: number; note: string | null; createdBy: string | null;
+  costPrice: number; committedCost: number; consumedCost: number;
+  dyeColour: string | null; dyeInstructions: string | null;
   itemOnHand: number; itemReserved: number; itemAvailable: number; itemShortage: number;
 };
 type StockOption = { id: string; sku: string; name: string; unit: string; category: string; onHand: number; available: number };
 type Stylist = { id: string; name: string; role: string };
+
+type CustomMeasurement = { name: string; value: string; notes: string };
+
+function parseStandardMeasurements(raw: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (k !== "_custom") result[k] = String(v);
+  }
+  return result;
+}
+
+function parseCustomMeasurements(raw: Record<string, unknown>): CustomMeasurement[] {
+  const arr = raw._custom;
+  if (!Array.isArray(arr)) return [];
+  return arr.map((item: unknown) => {
+    const m = item as Record<string, unknown>;
+    return { name: String(m.name ?? ""), value: String(m.value ?? ""), notes: String(m.notes ?? "") };
+  });
+}
 
 const STAGE_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"] as const;
 const METHODS = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"] as const;
@@ -38,14 +60,14 @@ const toDateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
 function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ status: stage.status, vendorName: stage.vendorName ?? "", dueDate: toDateInput(stage.dueDate), remarks: stage.remarks ?? "" });
+  const [form, setForm] = useState({ status: stage.status, vendorName: stage.vendorName ?? "", dueDate: toDateInput(stage.dueDate), remarks: stage.remarks ?? "", cost: String(stage.cost ?? 0) });
 
   async function save() {
     setSaving(true);
     try {
       await api(`/api/stages/${stage.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: form.status, vendorName: form.vendorName || null, dueDate: form.dueDate, remarks: form.remarks || null }),
+        body: JSON.stringify({ status: form.status, vendorName: form.vendorName || null, dueDate: form.dueDate, remarks: form.remarks || null, cost: Number(form.cost) || 0 }),
       });
       toast("Stage updated.");
       setOpen(false);
@@ -64,7 +86,7 @@ function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean;
           <span className="grid h-7 w-7 place-items-center rounded-full bg-stone-100 text-xs font-bold text-stone-500">{stage.sequence}</span>
           <div>
             <p className="text-sm font-semibold">{stage.type.replaceAll("_", " ")}</p>
-            <p className="text-xs text-stone-500">Due {shortDate(stage.dueDate)} · {stage.owner?.name || stage.vendorName || "Unassigned"}</p>
+            <p className="text-xs text-stone-500">Due {shortDate(stage.dueDate)} · {stage.owner?.name || stage.vendorName || "Unassigned"}{Number(stage.cost) > 0 ? ` · ${money(stage.cost)}` : ""}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -79,6 +101,7 @@ function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean;
           <div><label>Status</label><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>{STAGE_STATUSES.map((s) => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}</select></div>
           <div><label>Due date</label><input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
           <div><label>Vendor / karigar</label><input value={form.vendorName} onChange={(e) => setForm({ ...form, vendorName: e.target.value })} placeholder="e.g. Riyaz embroidery" /></div>
+          <div><label>Stage cost (₹)</label><input type="number" min="0" step="1" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} placeholder="e.g. labour / karigar charge" /></div>
           <div><label>Remarks</label><input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} placeholder="Notes for this stage" /></div>
           <div className="md:col-span-2 flex justify-end"><button onClick={save} disabled={saving} className="btn-primary btn-sm">{saving ? "Saving..." : "Save stage"}</button></div>
         </div>
@@ -89,6 +112,7 @@ function StageRow({ stage, canEdit, onSaved }: { stage: Stage; canEdit: boolean;
 
 export default function OrderSummaryPage() {
   const { id } = useParams<{ id: string }>();
+  const { confirm, prompt } = useConfirm();
   const [order, setOrder] = useState<Order | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -99,7 +123,7 @@ export default function OrderSummaryPage() {
   const [payError, setPayError] = useState("");
   const [materials, setMaterials] = useState<Material[]>([]);
   const [stockOptions, setStockOptions] = useState<StockOption[]>([]);
-  const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", allowShortage: false });
+  const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", dyeColour: "", dyeInstructions: "", allowShortage: false });
   const [savingMat, setSavingMat] = useState(false);
   const [matError, setMatError] = useState("");
 
@@ -107,6 +131,7 @@ export default function OrderSummaryPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [stylists, setStylists] = useState<Stylist[]>([]);
   const [editForm, setEditForm] = useState({ stylistId: "", orderValue: "", priority: "", deliveryDate: "", measurements: {} as Record<string, string>, customisations: "" });
+  const [editCustom, setEditCustom] = useState<CustomMeasurement[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -150,7 +175,7 @@ export default function OrderSummaryPage() {
   }
 
   async function removePayment(paymentId: string) {
-    if (!confirm("Remove this payment record?")) return;
+    if (!(await confirm({ title: "Remove payment?", message: "This deletes the payment record and updates the balance due.", confirmLabel: "Remove", tone: "danger" }))) return;
     try { await api(`/api/orders/${id}/payments/${paymentId}`, { method: "DELETE" }); toast("Payment removed."); await reloadPayments(); }
     catch (caught) { toast((caught as Error).message, "error"); }
   }
@@ -167,16 +192,28 @@ export default function OrderSummaryPage() {
     try {
       await api(`/api/orders/${id}/materials`, {
         method: "POST",
-        body: JSON.stringify({ inventoryItemId: matForm.inventoryItemId, requiredQty: Number(matForm.requiredQty), note: matForm.note || null, allowShortage: matForm.allowShortage }),
+        body: JSON.stringify({
+          inventoryItemId: matForm.inventoryItemId,
+          requiredQty: Number(matForm.requiredQty),
+          note: matForm.note || null,
+          dyeColour: matForm.dyeColour || null,
+          dyeInstructions: matForm.dyeInstructions || null,
+          allowShortage: matForm.allowShortage,
+        }),
       });
       toast("Material allocated.");
-      setMatForm({ inventoryItemId: "", requiredQty: "", note: "", allowShortage: false });
+      setMatForm({ inventoryItemId: "", requiredQty: "", note: "", dyeColour: "", dyeInstructions: "", allowShortage: false });
       await reloadMaterials();
     } catch (caught) { setMatError((caught as Error).message); } finally { setSavingMat(false); }
   }
 
   async function consumeMaterial(material: Material) {
-    const input = prompt(`Consume how much ${material.name}? Remaining allocated: ${material.remainingQty} ${material.unit}`, String(material.remainingQty));
+    const input = await prompt({
+      title: `Consume ${material.name}`,
+      message: `Remaining allocated: ${material.remainingQty} ${material.unit}.`,
+      input: { label: `Quantity (${material.unit})`, type: "number", defaultValue: String(material.remainingQty), placeholder: String(material.remainingQty) },
+      confirmLabel: "Record consumption",
+    });
     if (input === null) return;
     const quantity = Number(input);
     if (!Number.isFinite(quantity) || quantity <= 0) { toast("Enter a valid quantity.", "error"); return; }
@@ -185,28 +222,43 @@ export default function OrderSummaryPage() {
   }
 
   async function removeMaterial(material: Material) {
-    if (!confirm(`Remove the allocation of ${material.name}?`)) return;
+    if (!(await confirm({ title: "Remove allocation?", message: `This releases the reserved ${material.name} back to available stock.`, confirmLabel: "Remove", tone: "danger" }))) return;
     try { await api(`/api/orders/${id}/materials/${material.id}`, { method: "DELETE" }); toast("Allocation removed."); await reloadMaterials(); }
     catch (caught) { toast((caught as Error).message, "error"); }
   }
 
   function openEdit() {
     if (!order) return;
+    const raw = order.measurements as Record<string, unknown>;
     setEditForm({
       stylistId: "",
       orderValue: String(order.orderValue),
       priority: order.priority,
       deliveryDate: order.deliveryDate.slice(0, 10),
-      measurements: { ...order.measurements },
+      measurements: parseStandardMeasurements(raw),
       customisations: order.customisations?.join(", ") ?? "",
     });
+    setEditCustom(parseCustomMeasurements(raw));
     setEditError("");
     setShowEdit(true);
+  }
+
+  function addEditCustom() {
+    setEditCustom((prev) => [...prev, { name: "", value: "", notes: "" }]);
+  }
+
+  function updateEditCustom(index: number, field: keyof CustomMeasurement, val: string) {
+    setEditCustom((prev) => prev.map((m, i) => i === index ? { ...m, [field]: val } : m));
+  }
+
+  function removeEditCustom(index: number) {
+    setEditCustom((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function saveEdit(event: React.FormEvent) {
     event.preventDefault();
     setSavingEdit(true); setEditError("");
+    const validCustom = editCustom.filter((m) => m.name.trim() && m.value.trim());
     try {
       await api(`/api/orders/${id}`, {
         method: "PATCH",
@@ -215,7 +267,10 @@ export default function OrderSummaryPage() {
           orderValue: Number(editForm.orderValue),
           priority: editForm.priority,
           deliveryDate: editForm.deliveryDate,
-          measurements: editForm.measurements,
+          measurements: {
+            ...editForm.measurements,
+            _custom: validCustom.map((m) => ({ name: m.name.trim(), value: m.value.trim(), ...(m.notes.trim() && { notes: m.notes.trim() }) })),
+          },
           customisations: editForm.customisations.split(",").map((v) => v.trim()).filter(Boolean),
         }),
       });
@@ -239,6 +294,17 @@ export default function OrderSummaryPage() {
   const shortageLines = materials.filter((m) => m.itemShortage > 0);
   const selectedStock = stockOptions.find((s) => s.id === matForm.inventoryItemId);
 
+  // ── Live costing: cost accrues as materials are consumed and stage costs are logged ──
+  const materialCommittedCost = materials.reduce((sum, m) => sum + m.committedCost, 0);
+  const materialUsedCost = materials.reduce((sum, m) => sum + m.consumedCost, 0);
+  const productionCost = order.stages.reduce((sum, s) => sum + Number(s.cost ?? 0), 0);
+  const costSoFar = materialUsedCost + productionCost;          // actually incurred to date
+  const projectedCost = materialCommittedCost + productionCost; // if all allocated material is used
+  const profitSoFar = orderValue - costSoFar;
+  const projectedProfit = orderValue - projectedCost;
+  const marginSoFar = orderValue > 0 ? (profitSoFar / orderValue) * 100 : 0;
+  const hasCostData = materials.length > 0 || productionCost > 0;
+
   return (
     <div className="print-summary">
       <PageHeader
@@ -249,6 +315,7 @@ export default function OrderSummaryPage() {
             {canEditOrder && (
               <button onClick={openEdit} className="btn-secondary flex items-center gap-2"><Pencil size={15} />Edit order</button>
             )}
+            <a href={`/orders/${id}/dyer-slip`} className="btn-secondary flex items-center gap-2"><FileText size={15} />Dyer Slip</a>
             <button onClick={() => window.print()} className="btn-secondary">Print</button>
           </div>
         }
@@ -291,12 +358,26 @@ export default function OrderSummaryPage() {
               <div key={field}>
                 <label className="capitalize">{field}</label>
                 <input
-                  value={(editForm.measurements as Record<string, string>)[field] ?? ""}
+                  value={editForm.measurements[field] ?? ""}
                   onChange={(e) => setEditForm({ ...editForm, measurements: { ...editForm.measurements, [field]: e.target.value } })}
                   placeholder="inches"
                 />
               </div>
             ))}
+            <div className="md:col-span-2 xl:col-span-4">
+              <div className="flex items-center justify-between mb-1">
+                <label className="mb-0">Custom measurements</label>
+                <button type="button" onClick={addEditCustom} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button>
+              </div>
+              {editCustom.map((cm, i) => (
+                <div key={i} className="mt-2 grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-4"><label className="text-xs">Name</label><input value={cm.name} onChange={(e) => updateEditCustom(i, "name", e.target.value)} placeholder="e.g. Shoulder Drop" /></div>
+                  <div className="col-span-3"><label className="text-xs">Value</label><input value={cm.value} onChange={(e) => updateEditCustom(i, "value", e.target.value)} placeholder="inches" /></div>
+                  <div className="col-span-4"><label className="text-xs">Notes (optional)</label><input value={cm.notes} onChange={(e) => updateEditCustom(i, "notes", e.target.value)} placeholder="e.g. client request" /></div>
+                  <div className="col-span-1 flex justify-end pb-0.5"><button type="button" onClick={() => removeEditCustom(i)} className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600"><X size={14} /></button></div>
+                </div>
+              ))}
+            </div>
             <div className="md:col-span-2 xl:col-span-4">
               <label>Customisations (comma separated)</label>
               <input value={editForm.customisations} onChange={(e) => setEditForm({ ...editForm, customisations: e.target.value })} placeholder="Full sleeves, Personalised dupatta border" />
@@ -317,6 +398,29 @@ export default function OrderSummaryPage() {
         <div className="card p-4"><p className="text-xs text-stone-400">Delivery</p><p className="mt-1 text-lg font-semibold">{shortDate(order.deliveryDate)}</p><div className="mt-2 flex gap-2"><StatusBadge value={order.status} /><StatusBadge value={order.delayState} /></div></div>
       </section>
 
+      {/* Costing & profit — material cost accrues as stock is consumed; stage costs add labour */}
+      <section className="card mt-5 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-stone-100 p-5">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-wine/10 text-wine"><TrendingUp size={20} /></span>
+            <div><h2 className="font-semibold">Costing &amp; profit</h2><p className="text-xs text-stone-500">Booked at {money(orderValue)}. Cost builds up as materials are consumed and production stages are charged.</p></div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-stone-400">Profit so far</p>
+            <p className={`numeral text-3xl ${profitSoFar >= 0 ? "text-emerald-700" : "text-red-600"}`}>{money(profitSoFar)}</p>
+            <p className="text-xs text-stone-400">{marginSoFar.toFixed(1)}% margin</p>
+          </div>
+        </div>
+        <div className="grid gap-px bg-stone-100 md:grid-cols-4">
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Booked value</p><p className="mt-1 text-lg font-semibold">{money(orderValue)}</p></div>
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Material used</p><p className="mt-1 text-lg font-semibold">{money(materialUsedCost)}</p><p className="text-[11px] text-stone-400">{money(materialCommittedCost)} allocated</p></div>
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Production cost</p><p className="mt-1 text-lg font-semibold">{money(productionCost)}</p><p className="text-[11px] text-stone-400">across {order.stages.length} stages</p></div>
+          <div className="bg-white p-4"><p className="text-xs text-stone-400">Total cost so far</p><p className="mt-1 text-lg font-semibold text-wine">{money(costSoFar)}</p><p className="text-[11px] text-stone-400">{money(projectedCost)} projected</p></div>
+        </div>
+        {!hasCostData && <p className="border-t border-stone-100 px-5 py-3 text-xs text-stone-400">No material or stage costs recorded yet. Allocate materials (with a cost price set in inventory) and enter stage costs to track profit.</p>}
+        {hasCostData && profitSoFar !== projectedProfit && <p className="border-t border-stone-100 px-5 py-3 text-xs text-stone-500">If all allocated material is consumed, projected profit is <span className={`font-semibold ${projectedProfit >= 0 ? "text-emerald-700" : "text-red-600"}`}>{money(projectedProfit)}</span>.</p>}
+      </section>
+
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
         <div className="card p-5">
           <h2 className="font-semibold">Customer and styling</h2>
@@ -328,7 +432,25 @@ export default function OrderSummaryPage() {
         </div>
         <div className="card p-5">
           <h2 className="font-semibold">Measurements</h2>
-          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">{Object.entries(order.measurements || {}).map(([key, value]) => <div key={key}><dt className="capitalize text-stone-400">{key}</dt><dd>{value}</dd></div>)}</dl>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            {Object.entries(parseStandardMeasurements(order.measurements as Record<string, unknown>)).map(([key, value]) => (
+              <div key={key}><dt className="capitalize text-stone-400">{key}</dt><dd>{value}</dd></div>
+            ))}
+          </dl>
+          {parseCustomMeasurements(order.measurements as Record<string, unknown>).length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400"><Ruler size={12} />Custom</div>
+              <dl className="space-y-2 text-sm">
+                {parseCustomMeasurements(order.measurements as Record<string, unknown>).map((cm, i) => (
+                  <div key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                    <dt className="text-stone-400">{cm.name}</dt>
+                    <dd className="font-medium">{cm.value}</dd>
+                    {cm.notes && <dd className="text-xs text-stone-400 italic">{cm.notes}</dd>}
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
           {order.customisations?.length > 0 && <p className="mt-4 text-sm"><span className="text-stone-400">Customisations:</span> {order.customisations.join(", ")}</p>}
         </div>
       </section>
@@ -392,6 +514,8 @@ export default function OrderSummaryPage() {
               <div className="md:col-span-2"><label>Required {selectedStock ? `(${selectedStock.unit})` : ""}</label><input type="number" min="0.01" step="0.01" required value={matForm.requiredQty} onChange={(e) => setMatForm({ ...matForm, requiredQty: e.target.value })} placeholder="12" /></div>
               <div className="md:col-span-3"><label>Note</label><input value={matForm.note} onChange={(e) => setMatForm({ ...matForm, note: e.target.value })} placeholder="e.g. main body fabric" /></div>
               <div className="md:col-span-2 flex justify-end"><button disabled={savingMat} className="btn-primary btn-sm flex items-center gap-2"><Plus size={15} />{savingMat ? "Saving..." : "Allocate"}</button></div>
+              <div className="md:col-span-4"><label>Colour required (dye)</label><input value={matForm.dyeColour} onChange={(e) => setMatForm({ ...matForm, dyeColour: e.target.value })} placeholder="e.g. Rani Pink" /></div>
+              <div className="md:col-span-8"><label>Dye instructions</label><input value={matForm.dyeInstructions} onChange={(e) => setMatForm({ ...matForm, dyeInstructions: e.target.value })} placeholder="e.g. Light wash, do not use wax base" /></div>
               {selectedStock && Number(matForm.requiredQty) > selectedStock.available && (
                 <label className="md:col-span-12 flex items-center gap-2 text-xs text-amber-700"><input type="checkbox" className="h-4 w-4" checked={matForm.allowShortage} onChange={(e) => setMatForm({ ...matForm, allowShortage: e.target.checked })} />Only {selectedStock.available} {selectedStock.unit} available — allocate despite shortage (flags a purchase need)</label>
               )}
@@ -406,7 +530,14 @@ export default function OrderSummaryPage() {
                 <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{m.name} <span className="text-xs font-normal text-stone-400">{m.sku}</span>{m.itemShortage > 0 && <span className="badge ml-2 bg-amber-100 text-amber-700">SHORT {m.itemShortage} {m.unit}</span>}</p>
-                    <p className="text-xs text-stone-500">Allocated {m.requiredQty} {m.unit} · consumed {m.consumedQty} · {m.remainingQty} remaining{m.note ? ` · ${m.note}` : ""}</p>
+                    <p className="text-xs text-stone-500">Allocated {m.requiredQty} {m.unit} · consumed {m.consumedQty} · {m.remainingQty} remaining{m.note ? ` · ${m.note}` : ""}{m.costPrice > 0 ? ` · ${money(m.consumedCost)} used of ${money(m.committedCost)}` : ""}</p>
+                    {(m.dyeColour || m.dyeInstructions) && (
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        {m.dyeColour && <span className="font-medium text-stone-700">Colour: {m.dyeColour}</span>}
+                        {m.dyeColour && m.dyeInstructions && " · "}
+                        {m.dyeInstructions && <span>{m.dyeInstructions}</span>}
+                      </p>
+                    )}
                     <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-gradient-to-r from-wine to-wine-dark" style={{ width: `${pct}%` }} /></div>
                   </div>
                   <div className="flex items-center gap-2">

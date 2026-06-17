@@ -7,9 +7,17 @@ import { ORDER_WRITE_ROLES } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
 const STAGES = Object.values(ProductionStageType);
+const customMeasurementSchema = z.object({
+  name: z.string().min(1),
+  value: z.string().min(1),
+  notes: z.string().optional(),
+});
+
+const measurementsSchema = z.object({ _custom: z.array(customMeasurementSchema).optional() }).catchall(z.string());
+
 const schema = z.object({
   customerId: z.string().min(1), stylistId: z.string().min(1), storeId: z.string().min(1),
-  orderValue: z.coerce.number().positive(), measurements: z.record(z.string(), z.string()),
+  orderValue: z.coerce.number().positive(), measurements: measurementsSchema,
   customisations: z.array(z.string()).default([]), referenceImages: z.array(z.string().url()).default([]),
   priority: z.nativeEnum(Priority).default(Priority.NORMAL), deliveryDate: z.string().date(),
   stageOwners: z.record(z.string(), z.string()).default({}), stageVendors: z.record(z.string(), z.string()).default({}),

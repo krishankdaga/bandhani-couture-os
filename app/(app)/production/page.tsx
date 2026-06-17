@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Clock3, UserRound } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, Clock3, Factory, UserRound } from "lucide-react";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
@@ -28,6 +28,8 @@ const statusOptions = [
   { value: "NOT_STARTED", label: "Not started" }, { value: "IN_PROGRESS", label: "In progress" },
   { value: "BLOCKED", label: "Blocked" }, { value: "COMPLETED", label: "Completed" },
 ];
+// Delay states are stored as colours internally but always shown by their meaning.
+const delayLabels: Record<string, string> = { GREEN: "On track", YELLOW: "At risk", RED: "Delayed" };
 
 export default function ProductionPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -161,7 +163,7 @@ export default function ProductionPage() {
       action={canRecalculate ? <button disabled={recalculating} className="btn-secondary" onClick={recalculate}>{recalculating ? "Checking..." : "Check delays"}</button> : undefined}
     />
 
-    <section className="card mb-6 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find production work</h2><p className="text-xs text-stone-500">Search orders, customers, stages, assigned team members, or vendors.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Order, customer, stage or owner"/><select value={delayFilter} onChange={(e)=>setDelayFilter(e.target.value)}><option value="ALL">All delay states</option><option value="GREEN">Green: on track</option><option value="YELLOW">Yellow: at risk</option><option value="RED">Red: delayed</option></select><select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="ALL">All stage statuses</option>{statusOptions.map((item)=><option key={item.value} value={item.value}>{item.label}</option>)}</select><select value={dueFilter} onChange={(e)=>setDueFilter(e.target.value)}><option value="ALL">Any due date</option><option value="TODAY">Due today</option><option value="OVERDUE">Overdue</option><option value="WEEK">Due this week</option></select></div><p className="mt-3 text-xs text-stone-500">{filteredOrders.length} active order{filteredOrders.length===1?"":"s"} match these filters. Delay state shows whether work is on track, at risk, or late.</p></section>
+    <section className="card mb-6 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find production work</h2><p className="text-xs text-stone-500">Search orders, customers, stages, assigned team members, or vendors.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Order, customer, stage or owner"/><select value={delayFilter} onChange={(e)=>setDelayFilter(e.target.value)}><option value="ALL">All delivery health</option><option value="GREEN">On track</option><option value="YELLOW">At risk</option><option value="RED">Delayed</option></select><select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="ALL">All stage statuses</option>{statusOptions.map((item)=><option key={item.value} value={item.value}>{item.label}</option>)}</select><select value={dueFilter} onChange={(e)=>setDueFilter(e.target.value)}><option value="ALL">Any due date</option><option value="TODAY">Due today</option><option value="OVERDUE">Overdue</option><option value="WEEK">Due this week</option></select></div><p className="mt-3 text-xs text-stone-500">{filteredOrders.length} active order{filteredOrders.length===1?"":"s"} match these filters. Delay state shows whether work is on track, at risk, or late.</p></section>
 
     <section className="card mb-6 p-5">
       <div className="mb-5 flex items-center gap-2 text-sm text-stone-500">
@@ -169,7 +171,7 @@ export default function ProductionPage() {
         <ChevronRight size={15} /><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${customerId ? "bg-wine text-white" : "bg-stone-200"}`}>2</span><span>Select order</span>
         <ChevronRight size={15} /><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${orderId ? "bg-wine text-white" : "bg-stone-200"}`}>3</span><span>Update stages</span>
       </div>
-      {!customers.length ? <EmptyState message="No production work matches these filters. Clear filters to see all active orders." /> : <div className="grid gap-4 md:grid-cols-2">
+      {!customers.length ? <EmptyState icon={<Factory size={22} />} title="No matching production work" message="No active orders match these filters. Clear the filters to see all work in the atelier." action={<button onClick={clearFilters} className="btn-secondary">Clear filters</button>} /> : <div className="grid gap-4 md:grid-cols-2">
         <div><label htmlFor="production-customer">Customer</label><select id="production-customer" value={customerId} onChange={(event) => chooseCustomer(event.target.value)}><option value="">Choose a customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.phone}</option>)}</select><p className="mt-1 text-xs text-stone-400">Only customers with active orders are listed.</p></div>
         <div><label htmlFor="production-order">Order</label><select id="production-order" disabled={!customerId} value={orderId} onChange={(event) => chooseOrder(event.target.value)}><option value="">{customerId ? "Choose an order" : "Select a customer first"}</option>{customerOrders.map((order) => <option key={order.id} value={order.id}>{order.orderNumber} · Delivery {shortDate(order.deliveryDate)}</option>)}</select><p className="mt-1 text-xs text-stone-400">Select the order you want to review.</p></div>
       </div>}
@@ -199,7 +201,7 @@ export default function ProductionPage() {
             return <button type="button" key={stage.id} onClick={() => { setStageId(stage.id); setError(""); setSuccess(""); setPardonReason(""); }} className={`flex w-full items-center gap-3 rounded-lg p-3 text-left ${active ? "bg-wine text-white" : "hover:bg-stone-50"}`}>
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${active ? "bg-white/15" : stage.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : stage.delayState === "RED" ? "bg-red-100 text-red-700" : "bg-stone-100 text-stone-500"}`}><Icon size={17} /></span>
               <span className="min-w-0 flex-1"><span className="block text-xs opacity-70">Stage {stage.sequence}</span><span className="block truncate text-sm font-semibold">{stageLabels[stage.type]}</span></span>
-              <span className="text-[10px] font-bold">{stage.status === "COMPLETED" ? "DONE" : stage.delayState}</span>
+              <span className="text-[10px] font-bold">{stage.status === "COMPLETED" ? "DONE" : delayLabels[stage.delayState] ?? stage.delayState}</span>
             </button>;
           })}</div>
         </section>
@@ -228,7 +230,7 @@ export default function ProductionPage() {
 
           <div className="border-t border-stone-100 bg-stone-50 p-5">
             <div className="flex items-center gap-2"><UserRound size={17} className="text-stone-500" /><h4 className="text-sm font-semibold">Delay pardon</h4></div>
-            {selectedStage.delayState !== "RED" && <p className="mt-2 text-sm text-stone-500">A pardon is only available when this stage is delayed (Red).</p>}
+            {selectedStage.delayState !== "RED" && <p className="mt-2 text-sm text-stone-500">A pardon is only available when this stage is delayed.</p>}
             {selectedStage.delayState === "RED" && !selectedStage.pardons.some((pardon) => pardon.status === "REQUESTED") && <div className="mt-3"><label>External reason</label><textarea rows={2} value={pardonReason} onChange={(event) => setPardonReason(event.target.value)} placeholder="Explain the valid external reason for the delay." /><div className="mt-2 flex justify-end"><button type="button" disabled={savingId === selectedStage.id} className="btn-secondary" onClick={requestPardon}>Send pardon request</button></div></div>}
             <div className="mt-3 space-y-2">{selectedStage.pardons.map((pardon) => <div key={pardon.id} className="rounded-lg border border-stone-200 bg-white p-3 text-sm"><div className="flex items-start justify-between gap-3"><div><p>{pardon.reason}</p><p className="mt-1 text-xs text-stone-400">Requested by {pardon.requestedBy.name}</p></div><StatusBadge value={pardon.status} /></div>{sessionUser?.companyStatus === "OWNER" && pardon.status === "REQUESTED" && <div className="mt-3 flex gap-3 border-t border-stone-100 pt-3"><button disabled={reviewingId === pardon.id} type="button" className="text-xs font-semibold text-emerald-700" onClick={() => reviewPardon(pardon.id, "APPROVED")}>Approve</button><button disabled={reviewingId === pardon.id} type="button" className="text-xs font-semibold text-red-700" onClick={() => reviewPardon(pardon.id, "REJECTED")}>Reject</button></div>}</div>)}</div>
           </div>

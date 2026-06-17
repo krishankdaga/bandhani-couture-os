@@ -9,6 +9,7 @@
     "start": "NEXT_DIST_DIR=.next-build next start",
     "lint": "next lint",
     "test": "tsx --test tests/**/*.test.ts",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -27,6 +28,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",

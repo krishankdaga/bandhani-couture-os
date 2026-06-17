@@ -171,7 +171,7 @@ export default function CustomersPage() {
             </span>
             <textarea
               rows={3}
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-wine"
+              className="mt-1"
               placeholder="Full customer address"
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
@@ -183,7 +183,7 @@ export default function CustomersPage() {
               Store
             </span>
             <select
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-wine"
+              className="mt-1"
               value={form.storeId}
               onChange={(e) => setForm({ ...form, storeId: e.target.value })}
             >
@@ -202,8 +202,8 @@ export default function CustomersPage() {
             onChange={(v) => setForm({ ...form, preferences: v })}
           />
 
-          <button className="w-full rounded-xl bg-wine px-4 py-2 text-sm font-semibold text-white">
-            {editingId ? "Update Customer" : "Save Customer"}
+          <button className="btn-primary w-full">
+            {editingId ? "Update customer" : "Save customer"}
           </button>
         </form>}
 
@@ -216,8 +216,9 @@ export default function CustomersPage() {
               </div>
 
               <input
-                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-wine md:w-80"
+                className="md:w-80"
                 placeholder="Search name, phone, email or address..."
+                aria-label="Search customers"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -269,11 +270,11 @@ export default function CustomersPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   {canEdit && <button
                     onClick={() => editCustomer(customer)}
-                    className="rounded-xl border px-3 py-2 text-sm"
+                    className="btn-secondary btn-sm"
                   >
-                    Edit Contact
+                    Edit contact
                   </button>}
-                  <Link href={`/customers/${customer.id}`} className="rounded-xl border px-3 py-2 text-sm">View summary</Link>
+                  <Link href={`/customers/${customer.id}`} className="btn-secondary btn-sm">View summary</Link>
                 </div>
               </div>
             ))}
@@ -311,7 +312,7 @@ function Input({
       <input
         type={type}
         placeholder={placeholder}
-        className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-wine"
+        className="mt-1"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

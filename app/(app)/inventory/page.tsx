@@ -4,11 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Download } from "lucide-react";
 import { api, money, toast } from "@/lib/client";
+import { useConfirm } from "@/components/confirm-dialog";
+import { Drawer } from "@/components/drawer";
 
 const categories = ["FABRIC", "FINISHED_GOOD", "ACCESSORY", "PACKAGING", "OTHER"];
 const UNITS = ["metres", "yards", "pcs", "rolls", "kg", "grams", "litres", "sets", "pairs"];
 
 export default function InventoryPage() {
+  const { confirm } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [movementItemId, setMovementItemId] = useState<string | null>(null);
@@ -108,7 +111,7 @@ export default function InventoryPage() {
   }
 
   async function deleteItem(id: string) {
-    if (!confirm("Delete this inventory item?")) return;
+    if (!(await confirm({ title: "Delete inventory item?", message: "This permanently removes the item and its stock record. This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
 
     await api(`/api/inventory/${id}`, {
       method: "DELETE",
@@ -138,6 +141,8 @@ export default function InventoryPage() {
     await load();
     toast("Stock movement recorded.");
   }
+
+  const movementItem = items.find((i) => i.id === movementItemId);
 
   return (
     <>
@@ -169,7 +174,7 @@ export default function InventoryPage() {
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Category</span>
             <select
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="mt-1"
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
             >
@@ -186,7 +191,7 @@ export default function InventoryPage() {
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Unit</span>
             <select
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              className="mt-1"
               value={UNITS.includes(form.unit) ? form.unit : "pcs"}
               onChange={(e) => setForm({ ...form, unit: e.target.value })}
             >
@@ -198,7 +203,7 @@ export default function InventoryPage() {
           <Input label="Selling Price" type="number" value={form.sellingPrice} onChange={(v) => setForm({ ...form, sellingPrice: v })} />
           <Input label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
 
-          <button className="w-full rounded-xl bg-wine px-4 py-2 text-sm font-semibold text-white">
+          <button className="btn-primary w-full">
             {editingId ? "Save Changes" : "Add Item"}
           </button>
         </form>
@@ -259,60 +264,14 @@ export default function InventoryPage() {
 
                   {item.notes && <p className="mt-3 text-sm text-stone-600">{item.notes}</p>}
 
-                  {movementItemId === item.id && (
-                    <form onSubmit={saveMovement} className="mt-4 rounded-xl bg-sand p-4">
-                      <div className="grid gap-3 md:grid-cols-4">
-                        <select
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                          value={movement.type}
-                          onChange={(e) => setMovement({ ...movement, type: e.target.value })}
-                        >
-                          <option value="IN">Stock In</option>
-                          <option value="OUT">Stock Out</option>
-                          <option value="ADJUSTMENT">Adjustment</option>
-                        </select>
-
-                        <input
-                          type="number"
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                          value={movement.quantity}
-                          onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })}
-                        />
-
-                        <input
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                          placeholder="Reason"
-                          value={movement.reason}
-                          onChange={(e) => setMovement({ ...movement, reason: e.target.value })}
-                        />
-
-                        <input
-                          className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                          placeholder="Reference"
-                          value={movement.reference}
-                          onChange={(e) => setMovement({ ...movement, reference: e.target.value })}
-                        />
-                      </div>
-
-                      <div className="mt-3 flex gap-2">
-                        <button className="rounded-xl bg-wine px-4 py-2 text-sm font-semibold text-white">
-                          Save Movement
-                        </button>
-                        <button type="button" onClick={() => setMovementItemId(null)} className="rounded-xl border px-4 py-2 text-sm">
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => editItem(item)} className="rounded-xl border px-3 py-2 text-sm">
+                    <button onClick={() => editItem(item)} className="btn-secondary btn-sm">
                       Edit
                     </button>
-                    <button onClick={() => setMovementItemId(item.id)} className="rounded-xl border px-3 py-2 text-sm">
-                      Stock In / Out
+                    <button onClick={() => setMovementItemId(item.id)} className="btn-secondary btn-sm">
+                      Stock in / out
                     </button>
-                    <button onClick={() => deleteItem(item.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700">
+                    <button onClick={() => deleteItem(item.id)} className="btn-danger btn-sm">
                       Delete
                     </button>
                   </div>
@@ -326,6 +285,30 @@ export default function InventoryPage() {
           </div>
         </div>
       </div>
+
+      <Drawer
+        open={!!movementItemId}
+        onClose={() => setMovementItemId(null)}
+        title="Stock movement"
+        description={movementItem ? `${movementItem.sku} · ${movementItem.name}` : undefined}
+        footer={<div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setMovementItemId(null)}>Cancel</button><button form="movement-form" className="btn-primary">Save movement</button></div>}
+      >
+        {movementItem && (
+          <>
+            <div className="mb-5 grid grid-cols-3 gap-2 rounded-xl bg-stone-50 p-3 text-sm">
+              <p><span className="text-stone-400">On hand</span><br /><span className="numeral text-lg">{Number(movementItem.quantity)}</span> {movementItem.unit}</p>
+              <p><span className="text-stone-400">Available</span><br /><span className={`numeral text-lg ${Number(movementItem.available ?? 0) < 0 ? "text-amber-700" : "text-emerald-700"}`}>{Number(movementItem.available ?? 0)}</span> {movementItem.unit}</p>
+              <p><span className="text-stone-400">Reserved</span><br /><span className="numeral text-lg">{Number(movementItem.reserved ?? 0)}</span> {movementItem.unit}</p>
+            </div>
+            <form id="movement-form" onSubmit={saveMovement} className="grid gap-4 sm:grid-cols-2">
+              <div><label htmlFor="movement-type">Type</label><select id="movement-type" value={movement.type} onChange={(e) => setMovement({ ...movement, type: e.target.value })}><option value="IN">Stock In</option><option value="OUT">Stock Out</option><option value="ADJUSTMENT">Adjustment</option></select></div>
+              <div><label htmlFor="movement-qty">Quantity</label><input id="movement-qty" type="number" placeholder="Quantity" value={movement.quantity} onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })} /></div>
+              <div className="sm:col-span-2"><label htmlFor="movement-reason">Reason</label><input id="movement-reason" placeholder="Reason" value={movement.reason} onChange={(e) => setMovement({ ...movement, reason: e.target.value })} /></div>
+              <div className="sm:col-span-2"><label htmlFor="movement-ref">Reference <span className="font-normal text-stone-400">(optional)</span></label><input id="movement-ref" placeholder="Reference" value={movement.reference} onChange={(e) => setMovement({ ...movement, reference: e.target.value })} /></div>
+            </form>
+          </>
+        )}
+      </Drawer>
     </>
   );
 }
@@ -348,7 +331,7 @@ function Input({
       </span>
       <input
         type={type}
-        className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-wine"
+        className="mt-1"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
