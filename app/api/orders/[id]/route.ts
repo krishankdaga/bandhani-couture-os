@@ -17,12 +17,18 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   return order ? NextResponse.json({ order }) : NextResponse.json({ error: "Order not found" }, { status: 404 });
 }
 
+const customMeasurementSchema = z.object({
+  name: z.string().min(1),
+  value: z.string().min(1),
+  notes: z.string().optional(),
+});
+
 const editSchema = z.object({
   stylistId: z.string().min(1).optional(),
   orderValue: z.coerce.number().positive().optional(),
   priority: z.nativeEnum(Priority).optional(),
   deliveryDate: z.string().date().optional(),
-  measurements: z.record(z.string(), z.string()).optional(),
+  measurements: z.object({ _custom: z.array(customMeasurementSchema).optional() }).catchall(z.string()).optional(),
   customisations: z.array(z.string()).optional(),
   referenceImages: z.array(z.string().url()).optional(),
 });

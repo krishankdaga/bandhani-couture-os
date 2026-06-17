@@ -243,4 +243,26 @@
     break-inside: avoid;
     box-shadow: none !important;
   }
+
+  /* Dyer slip — full-page, clean print */
+  .dyer-slip-doc {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    color: black !important;
+  }
+  .dyer-slip-table th,
+  .dyer-slip-table td {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 1.5cm;
 }

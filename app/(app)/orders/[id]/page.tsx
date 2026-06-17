@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertTriangle, CreditCard, IndianRupee, Package, Pencil, Plus, Save, Scissors, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, CreditCard, FileText, IndianRupee, Package, Pencil, Plus, Ruler, Save, Scissors, Trash2, Wallet, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
@@ -21,12 +21,32 @@ type Order = {
 };
 type Payment = { id: string; amount: string; method: string; kind: string; note: string | null; paidAt: string; recordedBy: { name: string } | null };
 type Material = {
-  id: string; inventoryItemId: string; sku: string; name: string; unit: string;
+  id: string; inventoryItemId: string; sku: string; name: string; unit: string; category: string;
   requiredQty: number; consumedQty: number; remainingQty: number; note: string | null; createdBy: string | null;
+  dyeColour: string | null; dyeInstructions: string | null;
   itemOnHand: number; itemReserved: number; itemAvailable: number; itemShortage: number;
 };
 type StockOption = { id: string; sku: string; name: string; unit: string; category: string; onHand: number; available: number };
 type Stylist = { id: string; name: string; role: string };
+
+type CustomMeasurement = { name: string; value: string; notes: string };
+
+function parseStandardMeasurements(raw: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (k !== "_custom") result[k] = String(v);
+  }
+  return result;
+}
+
+function parseCustomMeasurements(raw: Record<string, unknown>): CustomMeasurement[] {
+  const arr = raw._custom;
+  if (!Array.isArray(arr)) return [];
+  return arr.map((item: unknown) => {
+    const m = item as Record<string, unknown>;
+    return { name: String(m.name ?? ""), value: String(m.value ?? ""), notes: String(m.notes ?? "") };
+  });
+}
 
 const STAGE_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"] as const;
 const METHODS = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"] as const;
@@ -99,7 +119,7 @@ export default function OrderSummaryPage() {
   const [payError, setPayError] = useState("");
   const [materials, setMaterials] = useState<Material[]>([]);
   const [stockOptions, setStockOptions] = useState<StockOption[]>([]);
-  const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", allowShortage: false });
+  const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", dyeColour: "", dyeInstructions: "", allowShortage: false });
   const [savingMat, setSavingMat] = useState(false);
   const [matError, setMatError] = useState("");
 
@@ -107,6 +127,7 @@ export default function OrderSummaryPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [stylists, setStylists] = useState<Stylist[]>([]);
   const [editForm, setEditForm] = useState({ stylistId: "", orderValue: "", priority: "", deliveryDate: "", measurements: {} as Record<string, string>, customisations: "" });
+  const [editCustom, setEditCustom] = useState<CustomMeasurement[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -167,10 +188,17 @@ export default function OrderSummaryPage() {
     try {
       await api(`/api/orders/${id}/materials`, {
         method: "POST",
-        body: JSON.stringify({ inventoryItemId: matForm.inventoryItemId, requiredQty: Number(matForm.requiredQty), note: matForm.note || null, allowShortage: matForm.allowShortage }),
+        body: JSON.stringify({
+          inventoryItemId: matForm.inventoryItemId,
+          requiredQty: Number(matForm.requiredQty),
+          note: matForm.note || null,
+          dyeColour: matForm.dyeColour || null,
+          dyeInstructions: matForm.dyeInstructions || null,
+          allowShortage: matForm.allowShortage,
+        }),
       });
       toast("Material allocated.");
-      setMatForm({ inventoryItemId: "", requiredQty: "", note: "", allowShortage: false });
+      setMatForm({ inventoryItemId: "", requiredQty: "", note: "", dyeColour: "", dyeInstructions: "", allowShortage: false });
       await reloadMaterials();
     } catch (caught) { setMatError((caught as Error).message); } finally { setSavingMat(false); }
   }
@@ -192,21 +220,36 @@ export default function OrderSummaryPage() {
 
   function openEdit() {
     if (!order) return;
+    const raw = order.measurements as Record<string, unknown>;
     setEditForm({
       stylistId: "",
       orderValue: String(order.orderValue),
       priority: order.priority,
       deliveryDate: order.deliveryDate.slice(0, 10),
-      measurements: { ...order.measurements },
+      measurements: parseStandardMeasurements(raw),
       customisations: order.customisations?.join(", ") ?? "",
     });
+    setEditCustom(parseCustomMeasurements(raw));
     setEditError("");
     setShowEdit(true);
+  }
+
+  function addEditCustom() {
+    setEditCustom((prev) => [...prev, { name: "", value: "", notes: "" }]);
+  }
+
+  function updateEditCustom(index: number, field: keyof CustomMeasurement, val: string) {
+    setEditCustom((prev) => prev.map((m, i) => i === index ? { ...m, [field]: val } : m));
+  }
+
+  function removeEditCustom(index: number) {
+    setEditCustom((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function saveEdit(event: React.FormEvent) {
     event.preventDefault();
     setSavingEdit(true); setEditError("");
+    const validCustom = editCustom.filter((m) => m.name.trim() && m.value.trim());
     try {
       await api(`/api/orders/${id}`, {
         method: "PATCH",
@@ -215,7 +258,10 @@ export default function OrderSummaryPage() {
           orderValue: Number(editForm.orderValue),
           priority: editForm.priority,
           deliveryDate: editForm.deliveryDate,
-          measurements: editForm.measurements,
+          measurements: {
+            ...editForm.measurements,
+            _custom: validCustom.map((m) => ({ name: m.name.trim(), value: m.value.trim(), ...(m.notes.trim() && { notes: m.notes.trim() }) })),
+          },
           customisations: editForm.customisations.split(",").map((v) => v.trim()).filter(Boolean),
         }),
       });
@@ -249,6 +295,7 @@ export default function OrderSummaryPage() {
             {canEditOrder && (
               <button onClick={openEdit} className="btn-secondary flex items-center gap-2"><Pencil size={15} />Edit order</button>
             )}
+            <a href={`/orders/${id}/dyer-slip`} className="btn-secondary flex items-center gap-2"><FileText size={15} />Dyer Slip</a>
             <button onClick={() => window.print()} className="btn-secondary">Print</button>
           </div>
         }
@@ -291,12 +338,26 @@ export default function OrderSummaryPage() {
               <div key={field}>
                 <label className="capitalize">{field}</label>
                 <input
-                  value={(editForm.measurements as Record<string, string>)[field] ?? ""}
+                  value={editForm.measurements[field] ?? ""}
                   onChange={(e) => setEditForm({ ...editForm, measurements: { ...editForm.measurements, [field]: e.target.value } })}
                   placeholder="inches"
                 />
               </div>
             ))}
+            <div className="md:col-span-2 xl:col-span-4">
+              <div className="flex items-center justify-between mb-1">
+                <label className="mb-0">Custom measurements</label>
+                <button type="button" onClick={addEditCustom} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button>
+              </div>
+              {editCustom.map((cm, i) => (
+                <div key={i} className="mt-2 grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-4"><label className="text-xs">Name</label><input value={cm.name} onChange={(e) => updateEditCustom(i, "name", e.target.value)} placeholder="e.g. Shoulder Drop" /></div>
+                  <div className="col-span-3"><label className="text-xs">Value</label><input value={cm.value} onChange={(e) => updateEditCustom(i, "value", e.target.value)} placeholder="inches" /></div>
+                  <div className="col-span-4"><label className="text-xs">Notes (optional)</label><input value={cm.notes} onChange={(e) => updateEditCustom(i, "notes", e.target.value)} placeholder="e.g. client request" /></div>
+                  <div className="col-span-1 flex justify-end pb-0.5"><button type="button" onClick={() => removeEditCustom(i)} className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600"><X size={14} /></button></div>
+                </div>
+              ))}
+            </div>
             <div className="md:col-span-2 xl:col-span-4">
               <label>Customisations (comma separated)</label>
               <input value={editForm.customisations} onChange={(e) => setEditForm({ ...editForm, customisations: e.target.value })} placeholder="Full sleeves, Personalised dupatta border" />
@@ -328,7 +389,25 @@ export default function OrderSummaryPage() {
         </div>
         <div className="card p-5">
           <h2 className="font-semibold">Measurements</h2>
-          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">{Object.entries(order.measurements || {}).map(([key, value]) => <div key={key}><dt className="capitalize text-stone-400">{key}</dt><dd>{value}</dd></div>)}</dl>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            {Object.entries(parseStandardMeasurements(order.measurements as Record<string, unknown>)).map(([key, value]) => (
+              <div key={key}><dt className="capitalize text-stone-400">{key}</dt><dd>{value}</dd></div>
+            ))}
+          </dl>
+          {parseCustomMeasurements(order.measurements as Record<string, unknown>).length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400"><Ruler size={12} />Custom</div>
+              <dl className="space-y-2 text-sm">
+                {parseCustomMeasurements(order.measurements as Record<string, unknown>).map((cm, i) => (
+                  <div key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                    <dt className="text-stone-400">{cm.name}</dt>
+                    <dd className="font-medium">{cm.value}</dd>
+                    {cm.notes && <dd className="text-xs text-stone-400 italic">{cm.notes}</dd>}
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
           {order.customisations?.length > 0 && <p className="mt-4 text-sm"><span className="text-stone-400">Customisations:</span> {order.customisations.join(", ")}</p>}
         </div>
       </section>
@@ -392,6 +471,8 @@ export default function OrderSummaryPage() {
               <div className="md:col-span-2"><label>Required {selectedStock ? `(${selectedStock.unit})` : ""}</label><input type="number" min="0.01" step="0.01" required value={matForm.requiredQty} onChange={(e) => setMatForm({ ...matForm, requiredQty: e.target.value })} placeholder="12" /></div>
               <div className="md:col-span-3"><label>Note</label><input value={matForm.note} onChange={(e) => setMatForm({ ...matForm, note: e.target.value })} placeholder="e.g. main body fabric" /></div>
               <div className="md:col-span-2 flex justify-end"><button disabled={savingMat} className="btn-primary btn-sm flex items-center gap-2"><Plus size={15} />{savingMat ? "Saving..." : "Allocate"}</button></div>
+              <div className="md:col-span-4"><label>Colour required (dye)</label><input value={matForm.dyeColour} onChange={(e) => setMatForm({ ...matForm, dyeColour: e.target.value })} placeholder="e.g. Rani Pink" /></div>
+              <div className="md:col-span-8"><label>Dye instructions</label><input value={matForm.dyeInstructions} onChange={(e) => setMatForm({ ...matForm, dyeInstructions: e.target.value })} placeholder="e.g. Light wash, do not use wax base" /></div>
               {selectedStock && Number(matForm.requiredQty) > selectedStock.available && (
                 <label className="md:col-span-12 flex items-center gap-2 text-xs text-amber-700"><input type="checkbox" className="h-4 w-4" checked={matForm.allowShortage} onChange={(e) => setMatForm({ ...matForm, allowShortage: e.target.checked })} />Only {selectedStock.available} {selectedStock.unit} available — allocate despite shortage (flags a purchase need)</label>
               )}
@@ -407,6 +488,13 @@ export default function OrderSummaryPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{m.name} <span className="text-xs font-normal text-stone-400">{m.sku}</span>{m.itemShortage > 0 && <span className="badge ml-2 bg-amber-100 text-amber-700">SHORT {m.itemShortage} {m.unit}</span>}</p>
                     <p className="text-xs text-stone-500">Allocated {m.requiredQty} {m.unit} · consumed {m.consumedQty} · {m.remainingQty} remaining{m.note ? ` · ${m.note}` : ""}</p>
+                    {(m.dyeColour || m.dyeInstructions) && (
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        {m.dyeColour && <span className="font-medium text-stone-700">Colour: {m.dyeColour}</span>}
+                        {m.dyeColour && m.dyeInstructions && " · "}
+                        {m.dyeInstructions && <span>{m.dyeInstructions}</span>}
+                      </p>
+                    )}
                     <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-gradient-to-r from-wine to-wine-dark" style={{ width: `${pct}%` }} /></div>
                   </div>
                   <div className="flex items-center gap-2">

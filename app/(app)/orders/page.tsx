@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Trash2 } from "lucide-react";
+import { ArrowRight, Plus, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { api, money, shortDate, toast } from "@/lib/client";
@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/component
 type Order = { id: string; orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string; customer: { name: string; phone: string }; stylist: { name: string }; stages: Array<{ status: string }> };
 type Meta = { stores: Array<{ id: string; name: string }>; users: Array<{ id: string; name: string; role: string }>; customers: Customer[] };
 type Customer = { id: string; name: string; phone: string; store: { name: string } };
+type CustomMeasurement = { name: string; value: string; notes: string };
 
 const PRIORITY_DOT: Record<string, string> = { NORMAL: "bg-stone-300", HIGH: "bg-amber-400", URGENT: "bg-red-500" };
 
@@ -27,6 +28,7 @@ export default function OrdersPage() {
   const [companyStatus, setCompanyStatus] = useState("");
   const [requestingDelete, setRequestingDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [customMeasurements, setCustomMeasurements] = useState<CustomMeasurement[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setPageError("");
@@ -49,14 +51,36 @@ export default function OrdersPage() {
     event.preventDefault(); setError(""); setSaving(true);
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
+    const validCustom = customMeasurements.filter((m) => m.name.trim() && m.value.trim());
     try {
       await api("/api/orders", {
         method: "POST",
-        body: JSON.stringify({ ...values, customisations: String(values.customisations || "").split(",").map((v) => v.trim()).filter(Boolean), referenceImages: String(values.referenceImages || "").split(",").map((v) => v.trim()).filter(Boolean), measurements: { bust: values.bust, waist: values.waist, hip: values.hip, length: values.length } }),
+        body: JSON.stringify({
+          ...values,
+          customisations: String(values.customisations || "").split(",").map((v) => v.trim()).filter(Boolean),
+          referenceImages: String(values.referenceImages || "").split(",").map((v) => v.trim()).filter(Boolean),
+          measurements: {
+            bust: values.bust, waist: values.waist, hip: values.hip, length: values.length,
+            _custom: validCustom.map((m) => ({ name: m.name.trim(), value: m.value.trim(), notes: m.notes.trim() || undefined })),
+          },
+        }),
       });
       setShow(false);
+      setCustomMeasurements([]);
       await load();
     } catch (e) { setError((e as Error).message); } finally { setSaving(false); }
+  }
+
+  function addCustomMeasurement() {
+    setCustomMeasurements((prev) => [...prev, { name: "", value: "", notes: "" }]);
+  }
+
+  function updateCustomMeasurement(index: number, field: keyof CustomMeasurement, val: string) {
+    setCustomMeasurements((prev) => prev.map((m, i) => i === index ? { ...m, [field]: val } : m));
+  }
+
+  function removeCustomMeasurement(index: number) {
+    setCustomMeasurements((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function requestDelete(order: Order) {
@@ -93,6 +117,17 @@ export default function OrdersPage() {
           <div><label>Store</label><select name="storeId" required><option value="">Select</option>{meta.stores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
           <div><label>Order value</label><input name="orderValue" type="number" min="1" required /></div>
           {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label>{l}</label><input name={n} required placeholder="inches" /></div>)}
+          <div className="md:col-span-4">
+            <div className="flex items-center justify-between"><label className="mb-0">Custom measurements</label><button type="button" onClick={addCustomMeasurement} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button></div>
+            {customMeasurements.map((cm, i) => (
+              <div key={i} className="mt-2 grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-4"><label className="text-xs">Name</label><input value={cm.name} onChange={(e) => updateCustomMeasurement(i, "name", e.target.value)} placeholder="e.g. Shoulder Drop" /></div>
+                <div className="col-span-3"><label className="text-xs">Value</label><input value={cm.value} onChange={(e) => updateCustomMeasurement(i, "value", e.target.value)} placeholder="inches" /></div>
+                <div className="col-span-4"><label className="text-xs">Notes (optional)</label><input value={cm.notes} onChange={(e) => updateCustomMeasurement(i, "notes", e.target.value)} placeholder="e.g. at booking" /></div>
+                <div className="col-span-1 flex justify-end pb-0.5"><button type="button" onClick={() => removeCustomMeasurement(i)} className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600"><X size={14} /></button></div>
+              </div>
+            ))}
+          </div>
           <div><label>Priority</label><select name="priority"><option>NORMAL</option><option>HIGH</option><option>URGENT</option></select></div>
           <div><label>Delivery date</label><input name="deliveryDate" type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} required /></div>
           <div className="md:col-span-2"><label>Customisations (comma separated)</label><input name="customisations" /></div>
