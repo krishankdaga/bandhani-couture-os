@@ -10,6 +10,7 @@ const allocateSchema = z.object({
   inventoryItemId: z.string().min(1, "Choose an inventory item"),
   requiredQty: z.coerce.number().positive("Quantity must be greater than zero").max(99_999_999),
   note: z.string().max(300).optional().nullable(),
+  sendToDyer: z.boolean().optional().default(false),
   dyeColour: z.string().max(100).optional().nullable(),
   dyeInstructions: z.string().max(500).optional().nullable(),
   allowShortage: z.boolean().optional().default(false),
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       committedCost: required * costPrice,
       consumedCost: consumed * costPrice,
       note: material.note,
+      sendToDyer: material.sendToDyer,
       dyeColour: material.dyeColour,
       dyeInstructions: material.dyeInstructions,
       createdBy: material.createdBy?.name ?? null,
@@ -108,6 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
 
       const dyeFields = {
+        sendToDyer: data.sendToDyer,
         ...(data.dyeColour !== undefined && { dyeColour: data.dyeColour || null }),
         ...(data.dyeInstructions !== undefined && { dyeInstructions: data.dyeInstructions || null }),
       };

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isApiError, requireUser, validationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { storeScope } from "@/lib/scope";
 import { writeAudit } from "@/lib/audit";
 
 const createSchema = z.object({
@@ -20,9 +19,10 @@ export async function GET(request: NextRequest) {
 
   const search = request.nextUrl.searchParams.get("search") ?? "";
 
+  // Customers are shared across all stores — a customer may visit either
+  // boutique — so no store scoping is applied here (only search filtering).
   const customers = await prisma.customer.findMany({
     where: {
-      ...storeScope(user),
       ...(search
         ? {
             OR: [

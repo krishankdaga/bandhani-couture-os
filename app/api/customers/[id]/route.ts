@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isApiError, requireUser, validationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { storeScope } from "@/lib/scope";
 import { writeAudit } from "@/lib/audit";
 
 const updateSchema = z.object({
@@ -32,7 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (isApiError(user)) return user;
   const { id } = await params;
   const customer = await prisma.customer.findFirst({
-    where: { id, ...storeScope(user) },
+    where: { id },
     include: {
       store: true,
       interactions: { include: { user: { select: { name: true } } }, orderBy: { occurredAt: "desc" } },
@@ -92,7 +91,7 @@ export async function PATCH(
     const data = updateSchema.parse(await request.json());
 
     const existing = await prisma.customer.findFirst({
-      where: { id, ...storeScope(user) },
+      where: { id },
       select: { id: true, name: true, phone: true, email: true, address: true, storeId: true },
     });
 
@@ -147,7 +146,7 @@ export async function POST(
     const data = interactionSchema.parse(await request.json());
 
     const existing = await prisma.customer.findFirst({
-      where: { id, ...storeScope(user) },
+      where: { id },
       select: { id: true },
     });
     if (!existing) {

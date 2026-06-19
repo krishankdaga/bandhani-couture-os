@@ -19,7 +19,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
   const rawMaterials = await prisma.orderMaterial.findMany({
-    where: { orderId: id },
+    // Only materials explicitly marked "send to dyer" appear on the slip — not
+    // everything allocated to the order is meant for the dyer.
+    where: { orderId: id, sendToDyer: true },
     include: { inventoryItem: { select: { name: true, sku: true, unit: true, category: true } } },
     orderBy: [{ inventoryItem: { category: "asc" } }, { createdAt: "asc" }],
   });

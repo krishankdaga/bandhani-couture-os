@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { storeScope } from "@/lib/scope";
 
 const dyeUpdateSchema = z.object({
+  sendToDyer: z.boolean().optional(),
   dyeColour: z.string().max(100).optional().nullable(),
   dyeInstructions: z.string().max(500).optional().nullable(),
   note: z.string().max(300).optional().nullable(),
@@ -24,6 +25,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const updated = await prisma.orderMaterial.update({
       where: { id: materialId },
       data: {
+        ...(data.sendToDyer !== undefined && { sendToDyer: data.sendToDyer }),
         ...(data.dyeColour !== undefined && { dyeColour: data.dyeColour || null }),
         ...(data.dyeInstructions !== undefined && { dyeInstructions: data.dyeInstructions || null }),
         ...(data.note !== undefined && { note: data.note || null }),

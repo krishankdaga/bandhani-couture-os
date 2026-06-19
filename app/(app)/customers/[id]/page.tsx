@@ -29,7 +29,7 @@ function parseCustomMeasurements(raw: Record<string, unknown>): CustomMeasuremen
   });
 }
 
-type Customer = { id: string; name: string; phone: string; email: string | null; address: string | null; updatedAt: string; preferences: string[] | null; likedPieces: string[] | null; piecesTried: string[] | null; store: { name: string }; interactions: Array<{ id: string; type: string; summary: string; occurredAt: string; user: { name: string } }>; communicationHistory: Array<{ id: string; channel: string; message: string; sentAt: string }>; orders: Array<{ id: string; orderNumber: string; orderValue: string; deliveryDate: string; status: string; measurements: Record<string, unknown>; stylist?: { name: string } | null }> };
+type Customer = { id: string; name: string; phone: string; email: string | null; address: string | null; updatedAt: string; preferences: string[] | null; likedPieces: string[] | null; piecesTried: string[] | null; measurements: Record<string, unknown> | null; store: { name: string }; interactions: Array<{ id: string; type: string; summary: string; occurredAt: string; user: { name: string } }>; communicationHistory: Array<{ id: string; channel: string; message: string; sentAt: string }>; orders: Array<{ id: string; orderNumber: string; orderValue: string; deliveryDate: string; status: string; measurements: Record<string, unknown>; stylist?: { name: string } | null }> };
 type Summary = { totalOrders: number; activeOrders: number; totalRevenue: number; totalPaid: number; outstanding: number; averageOrderValue: number; preferredStylist: string | null; favoriteCategories: Array<{ name: string; count: number }>; interactions: number; firstOrderDate: string | null; lastOrderDate: string | null };
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>(); const [customer, setCustomer] = useState<Customer | null>(null); const [summary, setSummary] = useState<Summary | null>(null); const [error, setError] = useState(""); const [formError, setFormError] = useState(""); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
@@ -63,15 +63,19 @@ export default function CustomerDetailPage() {
           <div><dt className="text-stone-400">Pieces tried</dt><dd>{safeJsonArray(customer.piecesTried).join(", ") || "Not recorded"}</dd></div>
         </dl>
         {(() => {
+          // Prefer the customer's saved measurements; fall back to their latest
+          // order's measurements for profiles created before this was tracked.
           const latestOrder = customer.orders.find((o) => o.status !== "CANCELLED" && o.measurements);
-          if (!latestOrder) return null;
-          const standard = parseStandardMeasurements(latestOrder.measurements);
-          const custom = parseCustomMeasurements(latestOrder.measurements);
+          const raw = customer.measurements ?? latestOrder?.measurements;
+          if (!raw) return null;
+          const standard = parseStandardMeasurements(raw);
+          const custom = parseCustomMeasurements(raw);
           const hasAny = Object.keys(standard).length > 0 || custom.length > 0;
           if (!hasAny) return null;
+          const sourceLabel = customer.measurements ? "saved profile" : latestOrder ? latestOrder.orderNumber : "";
           return (
             <div className="mt-5 border-t border-stone-100 pt-4">
-              <div className="flex items-center gap-1.5 mb-3 text-xs font-semibold uppercase tracking-wide text-stone-500"><Ruler size={12} />Body measurements <span className="font-normal text-stone-400 normal-case">({latestOrder.orderNumber})</span></div>
+              <div className="flex items-center gap-1.5 mb-3 text-xs font-semibold uppercase tracking-wide text-stone-500"><Ruler size={12} />Body measurements {sourceLabel && <span className="font-normal text-stone-400 normal-case">({sourceLabel})</span>}</div>
               <dl className="grid grid-cols-2 gap-2 text-sm">
                 {Object.entries(standard).map(([k, v]) => <div key={k}><dt className="capitalize text-stone-400">{k}</dt><dd>{v}</dd></div>)}
               </dl>

@@ -69,6 +69,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         },
         include: { customer: true, stylist: { select: { id: true, name: true } }, store: true, stages: { orderBy: { sequence: "asc" } } },
       });
+      // Keep the customer's saved measurements in sync with their latest order edit.
+      if (data.measurements) await tx.customer.update({ where: { id: updated.customerId }, data: { measurements: data.measurements } });
       await writeAudit(tx, { userId: user.id, action: "UPDATE", entity: "Order", entityId: id, oldValue: existing, newValue: updated });
       return updated;
     });

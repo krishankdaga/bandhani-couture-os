@@ -68,7 +68,7 @@ export default function DyerSlipPage() {
         </Link>
         <div className="flex items-center gap-3">
           {materials.length === 0 && (
-            <p className="text-sm text-amber-700">No materials allocated — slip will be empty.</p>
+            <p className="text-sm text-amber-700">No materials marked “Send to dyer” — slip will be empty. Flag materials on the order to include them here.</p>
           )}
           <button onClick={() => window.print()} className="btn-primary flex items-center gap-2">
             <Printer size={15} /> Print Dyer Slip
@@ -127,7 +127,7 @@ export default function DyerSlipPage() {
             Material Details
           </h2>
           {slipMaterials.length === 0 ? (
-            <p className="text-[13px] text-stone-500 italic">No materials have been allocated to this order.</p>
+            <p className="text-[13px] text-stone-500 italic">No materials have been marked for the dyer on this order.</p>
           ) : (
             <table className="dyer-slip-table w-full text-[12.5px]">
               <thead>

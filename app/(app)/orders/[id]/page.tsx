@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertTriangle, CreditCard, FileText, IndianRupee, Package, Pencil, Plus, Ruler, Save, Scissors, Trash2, TrendingUp, Wallet, X } from "lucide-react";
+import { AlertTriangle, CreditCard, Droplets, FileText, IndianRupee, Package, Pencil, Plus, Ruler, Save, Scissors, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
@@ -25,7 +25,7 @@ type Material = {
   id: string; inventoryItemId: string; sku: string; name: string; unit: string; category: string;
   requiredQty: number; consumedQty: number; remainingQty: number; note: string | null; createdBy: string | null;
   costPrice: number; committedCost: number; consumedCost: number;
-  dyeColour: string | null; dyeInstructions: string | null;
+  sendToDyer: boolean; dyeColour: string | null; dyeInstructions: string | null;
   itemOnHand: number; itemReserved: number; itemAvailable: number; itemShortage: number;
 };
 type StockOption = { id: string; sku: string; name: string; unit: string; category: string; onHand: number; available: number };
@@ -92,7 +92,7 @@ export default function OrderSummaryPage() {
   const [savingEditPay, setSavingEditPay] = useState(false);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [stockOptions, setStockOptions] = useState<StockOption[]>([]);
-  const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", dyeColour: "", dyeInstructions: "", allowShortage: false });
+  const [matForm, setMatForm] = useState({ inventoryItemId: "", requiredQty: "", note: "", sendToDyer: false, dyeColour: "", dyeInstructions: "", allowShortage: false });
   const [savingMat, setSavingMat] = useState(false);
   const [matError, setMatError] = useState("");
 
@@ -187,13 +187,14 @@ export default function OrderSummaryPage() {
           inventoryItemId: matForm.inventoryItemId,
           requiredQty: Number(matForm.requiredQty),
           note: matForm.note || null,
+          sendToDyer: matForm.sendToDyer,
           dyeColour: matForm.dyeColour || null,
           dyeInstructions: matForm.dyeInstructions || null,
           allowShortage: matForm.allowShortage,
         }),
       });
       toast("Material allocated.");
-      setMatForm({ inventoryItemId: "", requiredQty: "", note: "", dyeColour: "", dyeInstructions: "", allowShortage: false });
+      setMatForm({ inventoryItemId: "", requiredQty: "", note: "", sendToDyer: false, dyeColour: "", dyeInstructions: "", allowShortage: false });
       await reloadMaterials();
     } catch (caught) { setMatError((caught as Error).message); } finally { setSavingMat(false); }
   }
@@ -216,6 +217,15 @@ export default function OrderSummaryPage() {
     if (!(await confirm({ title: "Remove allocation?", message: `This releases the reserved ${material.name} back to available stock.`, confirmLabel: "Remove", tone: "danger" }))) return;
     try { await api(`/api/orders/${id}/materials/${material.id}`, { method: "DELETE" }); toast("Allocation removed."); await reloadMaterials(); }
     catch (caught) { toast((caught as Error).message, "error"); }
+  }
+
+  // Toggle whether a material is sent to the dyer (i.e. shows on the dyer slip).
+  async function toggleSendToDyer(material: Material) {
+    try {
+      await api(`/api/orders/${id}/materials/${material.id}`, { method: "PATCH", body: JSON.stringify({ sendToDyer: !material.sendToDyer }) });
+      toast(material.sendToDyer ? `${material.name} removed from dyer slip.` : `${material.name} added to dyer slip.`);
+      await reloadMaterials();
+    } catch (caught) { toast((caught as Error).message, "error"); }
   }
 
   function openEdit() {
@@ -534,8 +544,11 @@ export default function OrderSummaryPage() {
               <div className="md:col-span-2"><label>Required {selectedStock ? `(${selectedStock.unit})` : ""}</label><input type="number" min="0.01" step="0.01" required value={matForm.requiredQty} onChange={(e) => setMatForm({ ...matForm, requiredQty: e.target.value })} placeholder="12" /></div>
               <div className="md:col-span-3"><label>Note</label><input value={matForm.note} onChange={(e) => setMatForm({ ...matForm, note: e.target.value })} placeholder="e.g. main body fabric" /></div>
               <div className="md:col-span-2 flex justify-end"><button disabled={savingMat} className="btn-primary btn-sm flex items-center gap-2"><Plus size={15} />{savingMat ? "Saving..." : "Allocate"}</button></div>
-              <div className="md:col-span-4"><label>Colour required (dye)</label><input value={matForm.dyeColour} onChange={(e) => setMatForm({ ...matForm, dyeColour: e.target.value })} placeholder="e.g. Rani Pink" /></div>
-              <div className="md:col-span-8"><label>Dye instructions</label><input value={matForm.dyeInstructions} onChange={(e) => setMatForm({ ...matForm, dyeInstructions: e.target.value })} placeholder="e.g. Light wash, do not use wax base" /></div>
+              <label className="md:col-span-12 flex items-center gap-2 text-sm font-medium text-stone-700"><input type="checkbox" className="h-4 w-4 accent-wine" checked={matForm.sendToDyer} onChange={(e) => setMatForm({ ...matForm, sendToDyer: e.target.checked })} /><Droplets size={14} className="text-wine" />Send to dyer (include this material on the dyer slip)</label>
+              {matForm.sendToDyer && <>
+                <div className="md:col-span-4"><label>Colour required (dye)</label><input value={matForm.dyeColour} onChange={(e) => setMatForm({ ...matForm, dyeColour: e.target.value })} placeholder="e.g. Rani Pink" /></div>
+                <div className="md:col-span-8"><label>Dye instructions</label><input value={matForm.dyeInstructions} onChange={(e) => setMatForm({ ...matForm, dyeInstructions: e.target.value })} placeholder="e.g. Light wash, do not use wax base" /></div>
+              </>}
               {selectedStock && Number(matForm.requiredQty) > selectedStock.available && (
                 <label className="md:col-span-12 flex items-center gap-2 text-xs text-amber-700"><input type="checkbox" className="h-4 w-4" checked={matForm.allowShortage} onChange={(e) => setMatForm({ ...matForm, allowShortage: e.target.checked })} />Only {selectedStock.available} {selectedStock.unit} available — allocate despite shortage (flags a purchase need)</label>
               )}
@@ -549,7 +562,7 @@ export default function OrderSummaryPage() {
               return (
                 <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">{m.name} <span className="text-xs font-normal text-stone-400">{m.sku}</span>{m.itemShortage > 0 && <span className="badge ml-2 bg-amber-100 text-amber-700">SHORT {m.itemShortage} {m.unit}</span>}</p>
+                    <p className="text-sm font-semibold">{m.name} <span className="text-xs font-normal text-stone-400">{m.sku}</span>{m.itemShortage > 0 && <span className="badge ml-2 bg-amber-100 text-amber-700">SHORT {m.itemShortage} {m.unit}</span>}{m.sendToDyer && <span className="badge ml-2 inline-flex items-center gap-1 bg-wine/10 text-wine"><Droplets size={11} />On dyer slip</span>}</p>
                     <p className="text-xs text-stone-500">Allocated {m.requiredQty} {m.unit} · consumed {m.consumedQty} · {m.remainingQty} remaining{m.note ? ` · ${m.note}` : ""}{m.costPrice > 0 ? ` · ${money(m.consumedCost)} used of ${money(m.committedCost)}` : ""}</p>
                     {(m.dyeColour || m.dyeInstructions) && (
                       <p className="mt-0.5 text-xs text-stone-500">
@@ -561,6 +574,15 @@ export default function OrderSummaryPage() {
                     <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-gradient-to-r from-wine to-wine-dark" style={{ width: `${pct}%` }} /></div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {canEditOrder && (
+                      <button
+                        onClick={() => toggleSendToDyer(m)}
+                        title={m.sendToDyer ? "Remove from dyer slip" : "Send to dyer (show on dyer slip)"}
+                        className={`btn-sm flex items-center gap-1 ${m.sendToDyer ? "bg-wine text-white hover:bg-wine-dark rounded-lg px-3 py-1.5" : "btn-secondary"}`}
+                      >
+                        <Droplets size={13} />{m.sendToDyer ? "On dyer slip" : "Send to dyer"}
+                      </button>
+                    )}
                     {canEditProduction && m.remainingQty > 0 && <button onClick={() => consumeMaterial(m)} className="btn-secondary btn-sm flex items-center gap-1"><Scissors size={13} />Consume</button>}
                     {canEditOrder && m.consumedQty === 0 && <button onClick={() => removeMaterial(m)} className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove allocation"><Trash2 size={15} /></button>}
                   </div>

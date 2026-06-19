@@ -64,7 +64,8 @@ export async function POST(request: NextRequest) {
       ]);
       if (!customer || !store) throw new Error("A selected related record is invalid");
       if (!stylist || stylist.role !== "STYLIST" || !stylist.active) throw new Error("Select an active stylist");
-      if (customer.storeId !== data.storeId) throw new Error("Customer and order must belong to the same store");
+      // Customers are shared across stores, so an order may be placed at any
+      // store regardless of where the customer was first registered.
       if (data.productionManagerId) {
         const manager = await tx.user.findUnique({ where: { id: data.productionManagerId } });
         if (!manager || manager.role !== "PRODUCTION_MANAGER" || !manager.active) throw new Error("Select an active production manager");
@@ -83,6 +84,9 @@ export async function POST(request: NextRequest) {
         },
         include: { stages: { orderBy: { sequence: "asc" } } },
       });
+      // Save the captured measurements onto the customer profile so they pre-fill
+      // future orders and show on the customer page.
+      await tx.customer.update({ where: { id: data.customerId }, data: { measurements: data.measurements } });
       // Record the advance taken at booking, if any, as the order's first payment.
       if (data.advanceAmount && data.advanceAmount > 0) {
         await tx.orderPayment.create({

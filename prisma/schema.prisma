@@ -219,8 +219,14 @@ model Customer {
   phone                String          @unique
   email                String?
   address              String?
+  // Home/registering store. Customers are visible and orderable across all
+  // stores (a customer may visit either boutique); this is just where they
+  // were first registered.
   storeId              String
   store                Store           @relation(fields: [storeId], references: [id])
+  // Saved body measurements for this customer (latest known). Pre-fills new
+  // orders and shows on the customer profile. Shape: { bust, waist, …, _custom: [] }.
+  measurements         Json?
   leadId               String?         @unique
   lead                 Lead?           @relation(fields: [leadId], references: [id])
   preferences          Json?
@@ -303,6 +309,9 @@ model OrderMaterial {
   requiredQty     Decimal       @db.Decimal(12, 2)
   consumedQty     Decimal       @default(0) @db.Decimal(12, 2)
   note            String?
+  // When true, this material is sent to the dyer and appears on the dyer slip.
+  // Not all allocated materials go to the dyer, so this is opt-in per allocation.
+  sendToDyer      Boolean       @default(false)
   dyeColour       String?
   dyeInstructions String?
   createdById     String?

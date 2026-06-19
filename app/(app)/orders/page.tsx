@@ -13,8 +13,31 @@ import { Drawer } from "@/components/drawer";
 
 type Order = { id: string; orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string; customer: { name: string; phone: string }; stylist: { name: string }; stages: Array<{ status: string }> };
 type Meta = { stores: Array<{ id: string; name: string }>; users: Array<{ id: string; name: string; role: string }>; customers: Customer[] };
-type Customer = { id: string; name: string; phone: string; store: { name: string } };
+type Customer = { id: string; name: string; phone: string; store: { name: string }; measurements?: Record<string, unknown> | null };
 type CustomMeasurement = { name: string; value: string; notes: string };
+
+const STANDARD_FIELDS = ["bust", "waist", "hip", "length"] as const;
+
+// Split a stored measurements blob into the four standard fields and the
+// free-form custom list, so a selected customer's saved measurements can
+// pre-fill the new-order form.
+function splitMeasurements(raw: Record<string, unknown> | null | undefined) {
+  const standard: Record<string, string> = {};
+  const custom: CustomMeasurement[] = [];
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) {
+      if (k === "_custom") {
+        if (Array.isArray(v)) for (const item of v) {
+          const m = (item ?? {}) as Record<string, unknown>;
+          if (m.name) custom.push({ name: String(m.name), value: String(m.value ?? ""), notes: m.notes ? String(m.notes) : "" });
+        }
+      } else if (STANDARD_FIELDS.includes(k as (typeof STANDARD_FIELDS)[number])) {
+        standard[k] = String(v ?? "");
+      }
+    }
+  }
+  return { standard, custom };
+}
 type NewCust = { name: string; phone: string; email: string; address: string; preferences: string };
 
 const PRIORITY_DOT: Record<string, string> = { NORMAL: "bg-stone-300", HIGH: "bg-amber-400", URGENT: "bg-red-500" };
@@ -47,6 +70,8 @@ export default function OrdersPage() {
   const [requestingDelete, setRequestingDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [customMeasurements, setCustomMeasurements] = useState<CustomMeasurement[]>([]);
+  // Pre-filled standard measurements from the selected customer's saved profile.
+  const [stdPrefill, setStdPrefill] = useState<Record<string, string>>({});
   const { confirm } = useConfirm();
 
   // Filters
@@ -114,6 +139,10 @@ export default function OrdersPage() {
     setSelectedCustId(c.id);
     setCustSearch("");
     setShowCustDrop(false);
+    // Pre-fill measurements from the customer's saved profile, if any.
+    const { standard, custom } = splitMeasurements(c.measurements);
+    setStdPrefill(standard);
+    setCustomMeasurements(custom);
   }
 
   function openNewCust() {
@@ -153,6 +182,8 @@ export default function OrdersPage() {
       setCustomers((prev) => [created, ...prev]);
       setSelectedCustId(created.id);
       setCustSearch("");
+      // A freshly created customer has no saved measurements yet — start clean.
+      setStdPrefill({}); setCustomMeasurements([]);
       closeNewCust();
       toast(`Customer ${created.name} created and selected.`);
     } catch (e) { setCustError((e as Error).message); } finally { setSavingCust(false); }
@@ -188,6 +219,7 @@ export default function OrdersPage() {
       });
       setShow(false);
       setCustomMeasurements([]);
+      setStdPrefill({});
       setSelectedCustId("");
       setCustSearch("");
       setFormStoreId("");
@@ -253,7 +285,7 @@ export default function OrdersPage() {
     setShow(false);
     setSelectedCustId(""); setCustSearch(""); setShowCustDrop(false);
     setShowNewCust(false); setNewCust(NEW_CUST_BLANK); setCustError("");
-    setCustomMeasurements([]); setFormStoreId(""); setError("");
+    setCustomMeasurements([]); setStdPrefill({}); setFormStoreId(""); setError("");
   }
 
   return (
@@ -294,7 +326,7 @@ export default function OrdersPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => { setSelectedCustId(""); setCustSearch(""); }}
+                  onClick={() => { setSelectedCustId(""); setCustSearch(""); setStdPrefill({}); setCustomMeasurements([]); }}
                   className="ml-1 shrink-0 rounded p-0.5 text-stone-400 hover:text-ink"
                   aria-label="Clear customer"
                 >
@@ -455,7 +487,7 @@ export default function OrdersPage() {
             </div>
           )}
 
-          {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label>{l}</label><input name={n} required placeholder="inches" /></div>)}
+          {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label>{l}</label><input key={`${selectedCustId}-${n}`} name={n} required placeholder="inches" defaultValue={stdPrefill[n] ?? ""} /></div>)}
           <div className="sm:col-span-2">
             <div className="flex items-center justify-between"><label className="mb-0">Custom measurements</label><button type="button" onClick={addCustomMeasurement} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button></div>
             {customMeasurements.map((cm, i) => (
