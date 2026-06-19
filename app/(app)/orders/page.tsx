@@ -168,12 +168,16 @@ export default function OrdersPage() {
     const form = new FormData(event.currentTarget);
     const values = Object.fromEntries(form);
     const validCustom = customMeasurements.filter((m) => m.name.trim() && m.value.trim());
+    const advanceRaw = String(values.advanceAmount || "").trim();
     try {
       await api("/api/orders", {
         method: "POST",
         body: JSON.stringify({
           ...values,
           customerId: selectedCustId,
+          productionManagerId: String(values.productionManagerId || "") || null,
+          advanceAmount: advanceRaw ? Number(advanceRaw) : null,
+          advanceMethod: String(values.advanceMethod || "CASH"),
           customisations: String(values.customisations || "").split(",").map((v) => v.trim()).filter(Boolean),
           referenceImages: String(values.referenceImages || "").split(",").map((v) => v.trim()).filter(Boolean),
           measurements: {
@@ -349,6 +353,13 @@ export default function OrdersPage() {
 
           <div><label>Stylist</label><select name="stylistId" required><option value="">Select</option>{meta.users.filter((v) => v.role === "STYLIST").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
           <div>
+            <label>Production manager <span className="font-normal text-stone-400">(assign now or later)</span></label>
+            <select name="productionManagerId">
+              <option value="">Assign later</option>
+              {meta.users.filter((v) => v.role === "PRODUCTION_MANAGER").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </div>
+          <div>
             <label>Store</label>
             <select
               name="storeId"
@@ -458,6 +469,8 @@ export default function OrdersPage() {
           </div>
           <div><label>Priority</label><select name="priority"><option>NORMAL</option><option>HIGH</option><option>URGENT</option></select></div>
           <div><label>Delivery date</label><input name="deliveryDate" type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} required /></div>
+          <div><label>Advance received <span className="font-normal text-stone-400">(optional)</span></label><input name="advanceAmount" type="number" min="1" step="1" placeholder="₹ amount" /></div>
+          <div><label>Advance via</label><select name="advanceMethod"><option value="CASH">Cash</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="BANK_TRANSFER">Bank transfer</option><option value="CHEQUE">Cheque</option><option value="OTHER">Other</option></select></div>
           <div className="sm:col-span-2"><label>Customisations (comma separated)</label><input name="customisations" /></div>
           <div className="sm:col-span-2"><label>Reference image URLs (comma separated)</label><input name="referenceImages" placeholder="https://example.com/reference.jpg" /></div>
           {error && <div className="sm:col-span-2"><InlineMessage message={error} /></div>}

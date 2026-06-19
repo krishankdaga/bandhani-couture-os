@@ -18,7 +18,7 @@ type Order = {
   orderNumber: string; orderValue: string; priority: string; deliveryDate: string; status: string; delayState: string;
   measurements: Record<string, string>; customisations: string[]; updatedAt: string;
   customer: { name: string; phone: string; email: string | null; address: string | null };
-  stylist: { name: string }; store: { name: string }; stages: Stage[];
+  stylist: { name: string }; productionManager: { id: string; name: string } | null; store: { name: string }; stages: Stage[];
 };
 type Payment = { id: string; amount: string; method: string; kind: string; note: string | null; paidAt: string; recordedBy: { name: string } | null };
 type Material = {
@@ -99,7 +99,8 @@ export default function OrderSummaryPage() {
   // Edit order state
   const [showEdit, setShowEdit] = useState(false);
   const [stylists, setStylists] = useState<Stylist[]>([]);
-  const [editForm, setEditForm] = useState({ stylistId: "", orderValue: "", priority: "", deliveryDate: "", measurements: {} as Record<string, string>, customisations: "" });
+  const [managers, setManagers] = useState<Stylist[]>([]);
+  const [editForm, setEditForm] = useState({ stylistId: "", productionManagerId: "", orderValue: "", priority: "", deliveryDate: "", measurements: {} as Record<string, string>, customisations: "" });
   const [editCustom, setEditCustom] = useState<CustomMeasurement[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
@@ -120,6 +121,7 @@ export default function OrderSummaryPage() {
       setStockOptions(matResult.items);
       setPermissions(meResult.user.permissions);
       setStylists((metaResult.users || []).filter((u: Stylist) => u.role === "STYLIST"));
+      setManagers((metaResult.users || []).filter((u: Stylist) => u.role === "PRODUCTION_MANAGER"));
     } catch (caught) { setError((caught as Error).message); } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -221,6 +223,7 @@ export default function OrderSummaryPage() {
     const raw = order.measurements as Record<string, unknown>;
     setEditForm({
       stylistId: "",
+      productionManagerId: "",
       orderValue: String(order.orderValue),
       priority: order.priority,
       deliveryDate: order.deliveryDate.slice(0, 10),
@@ -253,6 +256,7 @@ export default function OrderSummaryPage() {
         method: "PATCH",
         body: JSON.stringify({
           ...(editForm.stylistId && { stylistId: editForm.stylistId }),
+          ...(editForm.productionManagerId && { productionManagerId: editForm.productionManagerId }),
           orderValue: Number(editForm.orderValue),
           priority: editForm.priority,
           deliveryDate: editForm.deliveryDate,
@@ -343,6 +347,13 @@ export default function OrderSummaryPage() {
                 {stylists.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
+            <div>
+              <label>Production manager</label>
+              <select value={editForm.productionManagerId} onChange={(e) => setEditForm({ ...editForm, productionManagerId: e.target.value })}>
+                <option value="">{order.productionManager ? `Keep current (${order.productionManager.name})` : "Unassigned — assign one"}</option>
+                {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
             {(["bust", "waist", "hip", "length"] as const).map((field) => (
               <div key={field}>
                 <label className="capitalize">{field}</label>
@@ -416,6 +427,7 @@ export default function OrderSummaryPage() {
           <dl className="mt-4 space-y-2 text-sm">
             <div><dt className="text-stone-400">Customer</dt><dd>{order.customer.name} · {order.customer.phone}</dd></div>
             <div><dt className="text-stone-400">Stylist</dt><dd>{order.stylist.name}</dd></div>
+            <div><dt className="text-stone-400">Production manager</dt><dd>{order.productionManager?.name ?? <span className="text-stone-400 italic">Unassigned</span>}</dd></div>
             <div><dt className="text-stone-400">Priority</dt><dd>{order.priority}</dd></div>
           </dl>
         </div>

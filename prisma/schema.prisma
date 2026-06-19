@@ -126,6 +126,7 @@ model User {
   store               Store?                   @relation(fields: [storeId], references: [id])
   assignedLeads       Lead[]                   @relation("LeadStylist")
   styledOrders        Order[]                  @relation("OrderStylist")
+  managedOrders       Order[]                  @relation("OrderProductionManager")
   productionStages    ProductionStage[]        @relation("StageOwner")
   interactions        Interaction[]
   auditLogs           AuditLog[]
@@ -266,6 +267,8 @@ model Order {
   customer        Customer          @relation(fields: [customerId], references: [id])
   stylistId       String
   stylist         User              @relation("OrderStylist", fields: [stylistId], references: [id])
+  productionManagerId String?
+  productionManager   User?         @relation("OrderProductionManager", fields: [productionManagerId], references: [id])
   storeId         String
   store           Store             @relation(fields: [storeId], references: [id])
   orderValue      Decimal           @db.Decimal(12, 2)

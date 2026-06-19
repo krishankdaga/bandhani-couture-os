@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const { id } = await context.params;
   const order = await prisma.order.findFirst({
     where: { id, ...storeScope(user) },
-    include: { customer: true, stylist: { select: { id: true, name: true } }, store: true, stages: { include: { owner: { select: { id: true, name: true } }, pardons: { include: { requestedBy: { select: { name: true } }, reviewedBy: { select: { name: true } } }, orderBy: { createdAt: "desc" } } }, orderBy: { sequence: "asc" } }, pardons: { orderBy: { createdAt: "desc" } } },
+    include: { customer: true, stylist: { select: { id: true, name: true } }, productionManager: { select: { id: true, name: true } }, store: true, stages: { include: { owner: { select: { id: true, name: true } }, pardons: { include: { requestedBy: { select: { name: true } }, reviewedBy: { select: { name: true } } }, orderBy: { createdAt: "desc" } } }, orderBy: { sequence: "asc" } }, pardons: { orderBy: { createdAt: "desc" } } },
   });
   return order ? NextResponse.json({ order }) : NextResponse.json({ error: "Order not found" }, { status: 404 });
 }
@@ -25,6 +25,7 @@ const customMeasurementSchema = z.object({
 
 const editSchema = z.object({
   stylistId: z.string().min(1).optional(),
+  productionManagerId: z.string().min(1).nullable().optional(),
   orderValue: z.coerce.number().positive().optional(),
   priority: z.nativeEnum(Priority).optional(),
   deliveryDate: z.string().date().optional(),
@@ -50,10 +51,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         const stylist = await tx.user.findUnique({ where: { id: data.stylistId } });
         if (!stylist || stylist.role !== "STYLIST" || !stylist.active) throw new Error("Select an active stylist");
       }
+      if (data.productionManagerId) {
+        const manager = await tx.user.findUnique({ where: { id: data.productionManagerId } });
+        if (!manager || manager.role !== "PRODUCTION_MANAGER" || !manager.active) throw new Error("Select an active production manager");
+      }
       const updated = await tx.order.update({
         where: { id },
         data: {
           ...(data.stylistId && { stylistId: data.stylistId }),
+          ...(data.productionManagerId !== undefined && { productionManagerId: data.productionManagerId || null }),
           ...(data.orderValue !== undefined && { orderValue: data.orderValue }),
           ...(data.priority && { priority: data.priority }),
           ...(data.deliveryDate && { deliveryDate: new Date(data.deliveryDate) }),

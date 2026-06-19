@@ -31,6 +31,13 @@ export function Drawer({
   const panelRef = useRef<HTMLDivElement>(null);
   const lastFocused = useRef<HTMLElement | null>(null);
 
+  // Keep the latest onClose in a ref so the focus/keydown effect below depends
+  // only on `open`. Otherwise a parent passing a fresh onClose on every render
+  // (e.g. an inline arrow fn) re-runs the effect on each keystroke, which steals
+  // focus back to the first field — the "cursor jumps out after one letter" bug.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -44,7 +51,7 @@ export function Drawer({
     }, 0);
 
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key === "Escape") { event.preventDefault(); onCloseRef.current(); return; }
       if (event.key !== "Tab") return;
       const nodes = panelRef.current?.querySelectorAll<HTMLElement>(
         'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -66,7 +73,7 @@ export function Drawer({
       clearTimeout(focusTimer);
       lastFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!mounted || !open) return null;
 
