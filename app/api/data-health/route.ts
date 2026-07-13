@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isApiError, requireOwner, validationError } from "@/lib/api";
+import { syncDelayStates } from "@/lib/delay-sync";
 import { stockStanding } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
 
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
   const user = await requireOwner(request);
   if (isApiError(user)) return user;
   try {
+    await syncDelayStates();
     const now = new Date();
 
     const [

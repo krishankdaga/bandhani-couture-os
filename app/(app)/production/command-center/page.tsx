@@ -68,12 +68,12 @@ export default function CommandCenterPage() {
       <PageHeader eyebrow="Operations" title="Production Command Center" description="Active workload, delays, bottlenecks, team capacity and material shortages at a glance." />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Active orders" value={m.activeOrders} icon={Factory} hint="In confirmed, production or ready" />
-        <StatCard label="Delayed" value={m.delayed} tone={m.delayed > 0 ? "danger" : "default"} icon={ShieldAlert} hint="Past delivery commitment" />
-        <StatCard label="At risk" value={m.atRisk} tone={m.atRisk > 0 ? "warning" : "default"} icon={AlertTriangle} hint="Due soon or recovered" />
-        <StatCard label="Blocked stages" value={m.blocked} tone={m.blocked > 0 ? "warning" : "default"} icon={Layers} hint="Stages marked blocked" />
-        <StatCard label="Due this week" value={m.dueThisWeek} icon={Factory} hint="Delivery within 7 days" />
-        <StatCard label="Material shortages" value={m.shortages} tone={m.shortages > 0 ? "danger" : "default"} icon={PackageX} hint="Items short of reservations" />
+        <StatCard label="Active orders" value={m.activeOrders} icon={Factory} hint="In confirmed, production or ready" href="/orders" />
+        <StatCard label="Delayed" value={m.delayed} tone={m.delayed > 0 ? "danger" : "default"} icon={ShieldAlert} hint="Past delivery commitment" href="/orders?delay=RED" />
+        <StatCard label="At risk" value={m.atRisk} tone={m.atRisk > 0 ? "warning" : "default"} icon={AlertTriangle} hint="Due soon or recovered" href="/orders?delay=YELLOW" />
+        <StatCard label="Blocked stages" value={m.blocked} tone={m.blocked > 0 ? "warning" : "default"} icon={Layers} hint="Stages marked blocked" href="/production" />
+        <StatCard label="Due this week" value={m.dueThisWeek} icon={Factory} hint="Delivery within 7 days" href="/orders?view=DUE_WEEK" />
+        <StatCard label="Material shortages" value={m.shortages} tone={m.shortages > 0 ? "danger" : "default"} icon={PackageX} hint="Items short of reservations" href={data.canViewInventory ? "/inventory" : undefined} />
       </section>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">

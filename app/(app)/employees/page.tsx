@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { PermissionChecklist } from "@/components/permission-checklist";
 import { StatusBadge } from "@/components/status-badge";
 import { Drawer } from "@/components/drawer";
-import { SearchInput } from "@/components/ui";
+import { SearchInput, Select } from "@/components/ui";
 import { api, toast } from "@/lib/client";
 
 type RoleItem = { id: string; name: string; permissions: Array<{ permission: string }> };
@@ -131,11 +131,11 @@ export default function EmployeesPage() {
               <div className="flex items-center justify-between"><label>{selectedId ? "New password (optional)" : "Temporary password"}</label><button type="button" onClick={() => setForm({ ...form, password: generatePassword() })} className="mb-1 text-[11px] font-semibold text-accent-deep hover:underline">Generate</button></div>
               <input required={!selectedId} minLength={8} type={form.password ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={selectedId ? "Leave blank to keep current" : "Set a temporary password"} />
             </div>
-            <div><label>Company status</label><select value={form.companyStatus} onChange={(e) => setForm({ ...form, companyStatus: e.target.value })}><option>OWNER</option><option>MANAGER</option><option>EMPLOYEE</option></select></div>
-            <div><label>Custom role</label><select value={form.companyRoleId} onChange={(e) => roleChanged(e.target.value)}><option value="">No custom role</option>{data.roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></div>
-            <div><label>Store</label><select value={form.storeId} onChange={(e) => setForm({ ...form, storeId: e.target.value })}><option value="">All / unassigned</option>{data.stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></div>
-            <div><label>Detailed legacy role</label><select value={form.legacyRole} onChange={(e) => setForm({ ...form, legacyRole: e.target.value })}>{["OWNER", "PARTNER", "STORE_MANAGER", "STYLIST", "PRODUCTION_MANAGER", "QC_TEAM", "INVENTORY_TEAM", "PURCHASE_TEAM", "ACCOUNTS_TEAM"].map((role) => <option key={role}>{role}</option>)}</select></div>
-            <div><label>Account state</label><select value={form.active ? "ACTIVE" : "INACTIVE"} onChange={(e) => setForm({ ...form, active: e.target.value === "ACTIVE" })}><option>ACTIVE</option><option>INACTIVE</option></select></div>
+            <div><label>Company status</label><Select value={form.companyStatus} onChange={(v) => setForm({ ...form, companyStatus: v })} searchable={false} options={["OWNER", "MANAGER", "EMPLOYEE"].map((s) => ({ value: s, label: s }))} /></div>
+            <div><label>Custom role</label><Select value={form.companyRoleId} onChange={roleChanged} placeholder="No custom role" options={[{ value: "", label: "No custom role" }, ...data.roles.map((role) => ({ value: role.id, label: role.name }))]} /></div>
+            <div><label>Store</label><Select value={form.storeId} onChange={(v) => setForm({ ...form, storeId: v })} placeholder="All / unassigned" options={[{ value: "", label: "All / unassigned" }, ...data.stores.map((store) => ({ value: store.id, label: store.name }))]} /></div>
+            <div><label>Detailed legacy role</label><Select value={form.legacyRole} onChange={(v) => setForm({ ...form, legacyRole: v })} options={["OWNER", "PARTNER", "STORE_MANAGER", "STYLIST", "PRODUCTION_MANAGER", "QC_TEAM", "INVENTORY_TEAM", "PURCHASE_TEAM", "ACCOUNTS_TEAM"].map((role) => ({ value: role, label: role.replaceAll("_", " ") }))} /></div>
+            <div><label>Account state</label><Select value={form.active ? "ACTIVE" : "INACTIVE"} onChange={(v) => setForm({ ...form, active: v === "ACTIVE" })} searchable={false} options={["ACTIVE", "INACTIVE"].map((s) => ({ value: s, label: s }))} /></div>
           </div>
           <div className="border-t border-stone-100 pt-5">
             <h3 className="font-semibold">Visible modules and actions</h3>

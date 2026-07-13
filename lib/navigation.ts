@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardList, Factory, FileClock, Gauge, HeartPulse, KeyRound, MessageSquare, Package, Percent,
-  RadioTower, Settings, ShoppingBag, Sparkles, UserCog, UserRoundSearch, Users, Bot,
+  RadioTower, Settings, ShoppingBag, Sparkles, Truck, UserCog, UserRoundSearch, Users, Bot,
 } from "lucide-react";
 import type { Permission } from "@/lib/permissions";
 
@@ -24,6 +24,7 @@ export const navigationItems: NavigationItem[] = [
   { label: "Incentives", href: "/incentives", icon: Percent, permission: "incentives.view", group: "Business" },
   { label: "WhatsApp Automation", href: "/whatsapp", icon: MessageSquare, permission: "whatsapp.view", group: "Business" },
   { label: "Bandhani Assistant", href: "/assistant", icon: Bot, permission: "reports.view", group: "Business" },
+  { label: "Vendors", href: "/vendors", icon: Truck, permission: "vendors.view", group: "Administration" },
   { label: "Employees", href: "/employees", icon: UserCog, permission: "employees.view", group: "Administration" },
   { label: "Roles & Access", href: "/roles", icon: KeyRound, permission: "roles.view", group: "Administration" },
   { label: "Data Health", href: "/data-health", icon: HeartPulse, permission: "audit.view", ownerOnly: true, group: "Administration" },

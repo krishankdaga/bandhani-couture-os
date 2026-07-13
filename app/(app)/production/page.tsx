@@ -1,11 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Clock3, Factory, UserRound } from "lucide-react";
+import { AlertCircle, Check, Clock3, Factory, SlidersHorizontal, UserRound } from "lucide-react";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { QuickViews } from "@/components/ui";
+import { QuickViews, Select } from "@/components/ui";
 import { api, shortDate } from "@/lib/client";
 
 type Pardon = { id: string; status: string; reason: string; requestedBy: { name: string } };
@@ -51,6 +51,7 @@ function stageMatchesView(stage: Stage, view: PView): boolean {
 export default function ProductionPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -63,17 +64,20 @@ export default function ProductionPage() {
   const [recalculating, setRecalculating] = useState(false);
   const [pardonReason, setPardonReason] = useState("");
   const [search, setSearch] = useState(""); const [delayFilter, setDelayFilter] = useState("ALL"); const [statusFilter, setStatusFilter] = useState("ALL"); const [dueFilter, setDueFilter] = useState("ALL");
+  const [showFilters, setShowFilters] = useState(false);
 
   const load = useCallback(async (showLoader = true) => {
     if (showLoader) setLoading(true);
     setError("");
     try {
-      const [orderResult, metaResult, sessionResult] = await Promise.all([
+      const [orderResult, metaResult, sessionResult, vendorResult] = await Promise.all([
         api<{ orders: Order[] }>("/api/orders"), api<{ users: User[] }>("/api/meta"), api<{ user: SessionUser }>("/api/auth/me"),
+        api<{ vendors: { id: string; name: string }[] }>("/api/vendors").catch(() => ({ vendors: [] })),
       ]);
       setOrders(orderResult.orders.filter((order) => !["DELIVERED", "CANCELLED"].includes(order.status)));
       setUsers(metaResult.users);
       setSessionUser(sessionResult.user);
+      setVendors(vendorResult.vendors);
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -96,6 +100,7 @@ export default function ProductionPage() {
   const canEdit = sessionUser?.permissions.includes("production.edit") ?? false;
   const canRecalculate = canEdit;
   function clearFilters(){setSearch("");setDelayFilter("ALL");setStatusFilter("ALL");setDueFilter("ALL");}
+  const activeFilterCount = (search.trim() ? 1 : 0) + (delayFilter !== "ALL" ? 1 : 0) + (statusFilter !== "ALL" ? 1 : 0) + (dueFilter !== "ALL" ? 1 : 0);
 
   // Quick views drive the existing select filters so the chip state and the
   // dropdowns always agree. Counts reflect orders with a matching stage.
@@ -206,25 +211,41 @@ export default function ProductionPage() {
       action={canRecalculate ? <button disabled={recalculating} className="btn-secondary" onClick={recalculate}>{recalculating ? "Checking..." : "Check delays"}</button> : undefined}
     />
 
-    <section className="card mb-6 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find production work</h2><p className="text-xs text-stone-500">Search orders, customers, stages, assigned team members, or vendors.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="mb-3"><QuickViews views={productionViews} value={activeView} onChange={applyView} /></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Order, customer, stage or owner"/><select value={delayFilter} onChange={(e)=>setDelayFilter(e.target.value)}><option value="ALL">All delivery health</option><option value="GREEN">On track</option><option value="YELLOW">At risk</option><option value="RED">Delayed</option></select><select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="ALL">All stage statuses</option>{statusOptions.map((item)=><option key={item.value} value={item.value}>{item.label}</option>)}</select><select value={dueFilter} onChange={(e)=>setDueFilter(e.target.value)}><option value="ALL">Any due date</option><option value="TODAY">Due today</option><option value="OVERDUE">Overdue</option><option value="WEEK">Due this week</option></select></div><p className="mt-3 text-xs text-stone-500">{filteredOrders.length} active order{filteredOrders.length===1?"":"s"} match these filters. Delay state shows whether work is on track, at risk, or late.</p></section>
+    <section className="card mb-6 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Find production work</h2>
+          <p className="text-xs text-stone-500">{filteredOrders.length} active order{filteredOrders.length===1?"":"s"}{activeFilterCount>0?" match these filters":" in the atelier"}. Search by order, customer, stage, owner or vendor.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {activeFilterCount>0 && <button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button>}
+          <button type="button" onClick={()=>setShowFilters(v=>!v)} className="btn-secondary btn-sm flex items-center gap-1.5"><SlidersHorizontal size={14} />Filters{activeFilterCount>0 && <span className="rounded-full bg-wine px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{activeFilterCount}</span>}</button>
+        </div>
+      </div>
+      {showFilters && (
+        <div className="mt-4 border-t border-stone-100 pt-4">
+          <div className="mb-3"><QuickViews views={productionViews} value={activeView} onChange={applyView} /></div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Order, customer, stage or owner"/>
+            <Select value={delayFilter} onChange={setDelayFilter} searchable={false} ariaLabel="Filter by delivery health" options={[{value:"ALL",label:"All delivery health"},{value:"GREEN",label:"On track"},{value:"YELLOW",label:"At risk"},{value:"RED",label:"Delayed"}]} />
+            <Select value={statusFilter} onChange={setStatusFilter} searchable={false} ariaLabel="Filter by stage status" options={[{value:"ALL",label:"All stage statuses"},...statusOptions.map((s)=>({value:s.value,label:s.label}))]} />
+            <Select value={dueFilter} onChange={setDueFilter} searchable={false} ariaLabel="Filter by due date" options={[{value:"ALL",label:"Any due date"},{value:"TODAY",label:"Due today"},{value:"OVERDUE",label:"Overdue"},{value:"WEEK",label:"Due this week"}]} />
+          </div>
+        </div>
+      )}
+    </section>
 
     <section className="card mb-6 p-5">
-      <div className="mb-5 flex items-center gap-2 text-sm text-stone-500">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-wine text-xs font-bold text-white">1</span><span>Select customer</span>
-        <ChevronRight size={15} /><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${customerId ? "bg-wine text-white" : "bg-stone-200"}`}>2</span><span>Select order</span>
-        <ChevronRight size={15} /><span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${orderId ? "bg-wine text-white" : "bg-stone-200"}`}>3</span><span>Update stages</span>
-      </div>
+      <div className="mb-4"><h2 className="font-semibold">Select an order to update</h2><p className="text-xs text-stone-500">Pick a customer, then one of their active orders to review and update its stages.</p></div>
       {!customers.length ? <EmptyState icon={<Factory size={22} />} title="No matching production work" message="No active orders match these filters. Clear the filters to see all work in the atelier." action={<button onClick={clearFilters} className="btn-secondary">Clear filters</button>} /> : <div className="grid gap-4 md:grid-cols-2">
-        <div><label htmlFor="production-customer">Customer</label><select id="production-customer" value={customerId} onChange={(event) => chooseCustomer(event.target.value)}><option value="">Choose a customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.phone}</option>)}</select><p className="mt-1 text-xs text-stone-400">Only customers with active orders are listed.</p></div>
-        <div><label htmlFor="production-order">Order</label><select id="production-order" disabled={!customerId} value={orderId} onChange={(event) => chooseOrder(event.target.value)}><option value="">{customerId ? "Choose an order" : "Select a customer first"}</option>{customerOrders.map((order) => <option key={order.id} value={order.id}>{order.orderNumber} · Delivery {shortDate(order.deliveryDate)}</option>)}</select><p className="mt-1 text-xs text-stone-400">Select the order you want to review.</p></div>
+        <div><label htmlFor="production-customer">Customer</label><Select id="production-customer" value={customerId} onChange={chooseCustomer} placeholder="Choose a customer" options={customers.map((customer) => ({ value: customer.id, label: customer.name, hint: customer.phone }))} /><p className="mt-1 text-xs text-stone-400">Only customers with active orders are listed.</p></div>
+        <div><label htmlFor="production-order">Order</label><Select id="production-order" disabled={!customerId} value={orderId} onChange={chooseOrder} placeholder={customerId ? "Choose an order" : "Select a customer first"} options={customerOrders.map((order) => ({ value: order.id, label: order.orderNumber, hint: `Delivery ${shortDate(order.deliveryDate)}` }))} /><p className="mt-1 text-xs text-stone-400">Select the order you want to review.</p></div>
       </div>}
+      {customers.length > 0 && !selectedOrder && <p className="mt-4 text-sm text-stone-400">{!customerId ? "Choose a customer to see their active orders." : "Now choose an order for this customer."}</p>}
     </section>
 
     {error && <div className="mb-4"><InlineMessage message={error} /></div>}
     {success && <div className="mb-4"><InlineMessage message={success} tone="success" /></div>}
-
-    {!customerId && customers.length > 0 && <EmptyState message="Start by selecting a customer above." />}
-    {customerId && !orderId && <EmptyState message="Now select an order for this customer." />}
 
     {selectedOrder && <div className="space-y-6">
       <section className="card p-5">
@@ -259,9 +280,9 @@ export default function ProductionPage() {
             {!canEdit && <div className="mb-5 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">You have view-only access. A Production Manager, QC Team member, Store Manager, Partner, or Owner can update this stage.</div>}
             <fieldset disabled={!canEdit || savingId === selectedStage.id}>
               <div className="grid gap-4 md:grid-cols-2">
-                <div><label>Stage status</label><select name="status" defaultValue={selectedStage.status}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><p className="mt-1 text-xs text-stone-400">Choose Completed only when this stage is fully finished.</p></div>
-                <div><label>Internal owner</label><select name="ownerId" defaultValue={selectedStage.ownerId ?? ""}><option value="">Unassigned</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.role.replaceAll("_", " ")}</option>)}</select></div>
-                <div><label>External vendor</label><input name="vendorName" defaultValue={selectedStage.vendorName ?? ""} placeholder="Optional vendor name" /></div>
+                <div><label>Stage status</label><Select name="status" defaultValue={selectedStage.status} searchable={false} disabled={!canEdit} options={statusOptions.map((option) => ({ value: option.value, label: option.label }))} /><p className="mt-1 text-xs text-stone-400">Choose Completed only when this stage is fully finished.</p></div>
+                <div><label>Internal owner</label><Select name="ownerId" defaultValue={selectedStage.ownerId ?? ""} disabled={!canEdit} placeholder="Unassigned" options={[{ value: "", label: "Unassigned" }, ...users.map((user) => ({ value: user.id, label: user.name, hint: user.role.replaceAll("_", " ") }))]} /></div>
+                <div><label>External vendor</label><input name="vendorName" list="production-vendor-options" defaultValue={selectedStage.vendorName ?? ""} placeholder="Select or type a vendor" /><datalist id="production-vendor-options">{vendors.map((v) => <option key={v.id} value={v.name} />)}</datalist><p className="mt-1 text-xs text-stone-400">Pick a vendor from your Vendors list, or type a name.</p></div>
                 <div><label>Start date</label><input type="date" name="startDate" defaultValue={selectedStage.startDate?.slice(0, 10) ?? ""} /></div>
                 <div><label>Due date</label><input required type="date" name="dueDate" defaultValue={selectedStage.dueDate.slice(0, 10)} /></div>
                 <div><label>Completion date</label><input type="date" value={selectedStage.completionDate?.slice(0, 10) ?? ""} disabled readOnly placeholder="Set automatically" /></div>

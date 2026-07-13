@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { api, money, shortDate, toast } from "@/lib/client";
+import { Select } from "@/components/ui";
 import { useConfirm } from "@/components/confirm-dialog";
 
 type Stage = {
@@ -64,7 +65,7 @@ function StageRow({ stage }: { stage: Stage }) {
           <span className="grid h-7 w-7 place-items-center rounded-full bg-stone-100 text-xs font-bold text-stone-500">{stage.sequence}</span>
           <div>
             <p className="text-sm font-semibold">{stage.type.replaceAll("_", " ")}</p>
-            <p className="text-xs text-stone-500">Due {shortDate(stage.dueDate)} · {stage.owner?.name || stage.vendorName || "Unassigned"}{Number(stage.cost) > 0 ? ` · ${money(stage.cost)}` : ""}</p>
+            <p className="text-xs text-stone-500">Due {shortDate(stage.dueDate)} · {stage.owner?.name ? stage.owner.name : stage.vendorName ? `Vendor: ${stage.vendorName}` : "No owner / vendor assigned"}{Number(stage.cost) > 0 ? ` · ${money(stage.cost)}` : ""}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -342,9 +343,7 @@ export default function OrderSummaryPage() {
             </div>
             <div>
               <label>Priority</label>
-              <select value={editForm.priority} onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}>
-                {["NORMAL", "HIGH", "URGENT"].map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <Select value={editForm.priority} onChange={(v) => setEditForm({ ...editForm, priority: v })} searchable={false} options={["NORMAL", "HIGH", "URGENT"].map((p) => ({ value: p, label: p }))} />
             </div>
             <div>
               <label>Delivery date</label>
@@ -352,17 +351,11 @@ export default function OrderSummaryPage() {
             </div>
             <div>
               <label>Reassign stylist</label>
-              <select value={editForm.stylistId} onChange={(e) => setEditForm({ ...editForm, stylistId: e.target.value })}>
-                <option value="">Keep current ({order.stylist.name})</option>
-                {stylists.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <Select value={editForm.stylistId} onChange={(v) => setEditForm({ ...editForm, stylistId: v })} placeholder={`Keep current (${order.stylist.name})`} options={[{ value: "", label: `Keep current (${order.stylist.name})` }, ...stylists.map((s) => ({ value: s.id, label: s.name }))]} />
             </div>
             <div>
               <label>Production manager</label>
-              <select value={editForm.productionManagerId} onChange={(e) => setEditForm({ ...editForm, productionManagerId: e.target.value })}>
-                <option value="">{order.productionManager ? `Keep current (${order.productionManager.name})` : "Unassigned — assign one"}</option>
-                {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
+              <Select value={editForm.productionManagerId} onChange={(v) => setEditForm({ ...editForm, productionManagerId: v })} placeholder={order.productionManager ? `Keep current (${order.productionManager.name})` : "Unassigned — assign one"} options={[{ value: "", label: order.productionManager ? `Keep current (${order.productionManager.name})` : "Unassigned — assign one" }, ...managers.map((m) => ({ value: m.id, label: m.name }))]} />
             </div>
             {(["bust", "waist", "hip", "length"] as const).map((field) => (
               <div key={field}>
@@ -479,8 +472,8 @@ export default function OrderSummaryPage() {
           {canEditOrder && (
             <form onSubmit={addPayment} className="mt-5 grid gap-3 rounded-xl border border-stone-200 bg-stone-50/60 p-4 md:grid-cols-12 md:items-end">
               <div className="md:col-span-3"><label>Amount (₹)</label><input type="number" min="1" step="1" required value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} placeholder="25000" /></div>
-              <div className="md:col-span-2"><label>Type</label><select value={payForm.kind} onChange={(e) => setPayForm({ ...payForm, kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select></div>
-              <div className="md:col-span-2"><label>Method</label><select value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value })}>{METHODS.map((m) => <option key={m} value={m}>{m.replaceAll("_", " ")}</option>)}</select></div>
+              <div className="md:col-span-2"><label>Type</label><Select value={payForm.kind} onChange={(v) => setPayForm({ ...payForm, kind: v })} searchable={false} options={KINDS.map((k) => ({ value: k, label: k }))} /></div>
+              <div className="md:col-span-2"><label>Method</label><Select value={payForm.method} onChange={(v) => setPayForm({ ...payForm, method: v })} searchable={false} options={METHODS.map((m) => ({ value: m, label: m.replaceAll("_", " ") }))} /></div>
               <div className="md:col-span-2"><label>Date</label><input type="date" value={payForm.paidAt} onChange={(e) => setPayForm({ ...payForm, paidAt: e.target.value })} /></div>
               <div className="md:col-span-3"><label>Note</label><input value={payForm.note} onChange={(e) => setPayForm({ ...payForm, note: e.target.value })} placeholder="e.g. advance at booking" /></div>
               <div className="md:col-span-12 flex justify-end"><button disabled={savingPay} className="btn-primary btn-sm flex items-center gap-2"><Plus size={15} />{savingPay ? "Saving..." : "Record payment"}</button></div>
@@ -493,8 +486,8 @@ export default function OrderSummaryPage() {
               editPay?.id === p.id ? (
                 <form key={p.id} onSubmit={saveEditPayment} className="grid gap-3 py-3 md:grid-cols-12 md:items-end">
                   <div className="md:col-span-3"><label>Amount (₹)</label><input type="number" min="1" step="1" required value={editPay.amount} onChange={(e) => setEditPay({ ...editPay, amount: e.target.value })} /></div>
-                  <div className="md:col-span-2"><label>Type</label><select value={editPay.kind} onChange={(e) => setEditPay({ ...editPay, kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select></div>
-                  <div className="md:col-span-2"><label>Method</label><select value={editPay.method} onChange={(e) => setEditPay({ ...editPay, method: e.target.value })}>{METHODS.map((m) => <option key={m} value={m}>{m.replaceAll("_", " ")}</option>)}</select></div>
+                  <div className="md:col-span-2"><label>Type</label><Select value={editPay.kind} onChange={(v) => setEditPay({ ...editPay, kind: v })} searchable={false} options={KINDS.map((k) => ({ value: k, label: k }))} /></div>
+                  <div className="md:col-span-2"><label>Method</label><Select value={editPay.method} onChange={(v) => setEditPay({ ...editPay, method: v })} searchable={false} options={METHODS.map((m) => ({ value: m, label: m.replaceAll("_", " ") }))} /></div>
                   <div className="md:col-span-2"><label>Date</label><input type="date" value={editPay.paidAt} onChange={(e) => setEditPay({ ...editPay, paidAt: e.target.value })} /></div>
                   <div className="md:col-span-3"><label>Note</label><input value={editPay.note} onChange={(e) => setEditPay({ ...editPay, note: e.target.value })} placeholder="e.g. advance at booking" /></div>
                   <div className="md:col-span-12 flex justify-end gap-2">
@@ -540,7 +533,7 @@ export default function OrderSummaryPage() {
 
           {canEditOrder && (
             <form onSubmit={allocate} className="mb-5 grid gap-3 rounded-xl border border-stone-200 bg-stone-50/60 p-4 md:grid-cols-12 md:items-end">
-              <div className="md:col-span-5"><label>Inventory item</label><select required value={matForm.inventoryItemId} onChange={(e) => setMatForm({ ...matForm, inventoryItemId: e.target.value })}><option value="">Choose material…</option>{stockOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.available} {s.unit} available)</option>)}</select></div>
+              <div className="md:col-span-5"><label>Inventory item</label><Select value={matForm.inventoryItemId} onChange={(v) => setMatForm({ ...matForm, inventoryItemId: v })} placeholder="Choose material…" options={stockOptions.map((s) => ({ value: s.id, label: s.name, hint: `${s.available} ${s.unit} available` }))} /></div>
               <div className="md:col-span-2"><label>Required {selectedStock ? `(${selectedStock.unit})` : ""}</label><input type="number" min="0.01" step="0.01" required value={matForm.requiredQty} onChange={(e) => setMatForm({ ...matForm, requiredQty: e.target.value })} placeholder="12" /></div>
               <div className="md:col-span-3"><label>Note</label><input value={matForm.note} onChange={(e) => setMatForm({ ...matForm, note: e.target.value })} placeholder="e.g. main body fabric" /></div>
               <div className="md:col-span-2 flex justify-end"><button disabled={savingMat} className="btn-primary btn-sm flex items-center gap-2"><Plus size={15} />{savingMat ? "Saving..." : "Allocate"}</button></div>

@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { SearchInput } from "@/components/ui";
+import { SearchInput, Select } from "@/components/ui";
 import { Drawer } from "@/components/drawer";
 import { UserRoundPlus } from "lucide-react";
 import { api, money, shortDate } from "@/lib/client";
@@ -34,21 +34,21 @@ export default function LeadsPage() {
     <Drawer open={showForm && canCreate} onClose={() => setShowForm(false)} title="New lead" description="Capture a new enquiry and assign a follow-up."
       footer={<div className="flex justify-end gap-2"><button type="button" disabled={saving} className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button><button form="lead-form" disabled={saving} className="btn-primary">{saving ? "Creating..." : "Create lead"}</button></div>}>
       <form id="lead-form" onSubmit={create} className="grid gap-4 sm:grid-cols-2">
-        <div><label>Name</label><input name="name" required /></div>
-        <div><label>Phone</label><input name="phone" required /></div>
-        <div><label>Source</label><select name="source">{["WALK_IN", "SOCIAL_MEDIA", "CALL", "WHATSAPP", "REFERRAL", "OTHER"].map(v => <option key={v}>{v}</option>)}</select></div>
-        <div><label>Store</label><select name="storeId" required><option value="">Select store</option>{meta.stores.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
-        <div><label>Stylist</label><select name="stylistId"><option value="">Unassigned</option>{meta.users.filter(v => v.role === "STYLIST").map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
-        <div><label>Budget</label><input name="budget" type="number" min="0" /></div>
-        <div><label>Event date</label><input name="eventDate" type="date" /></div>
-        <div><label>Follow-up date</label><input name="followUpDate" type="datetime-local" /></div>
-        <div className="sm:col-span-2"><label>Preferences (comma separated)</label><input name="preferences" placeholder="Pastels, lehenga, mirror work" /></div>
-        <div className="sm:col-span-2"><label>Notes</label><textarea name="notes" rows={3} /></div>
+        <div><label htmlFor="lead-name">Name</label><input id="lead-name" name="name" required /></div>
+        <div><label htmlFor="lead-phone">Phone</label><input id="lead-phone" name="phone" required /></div>
+        <div><label htmlFor="lead-source">Source</label><Select id="lead-source" name="source" defaultValue="WALK_IN" searchable={false} options={["WALK_IN", "SOCIAL_MEDIA", "CALL", "WHATSAPP", "REFERRAL", "OTHER"].map((v) => ({ value: v, label: v.replaceAll("_", " ") }))} /></div>
+        <div><label htmlFor="lead-store">Store</label><Select id="lead-store" name="storeId" required defaultValue="" placeholder="Select store" options={meta.stores.map((v) => ({ value: v.id, label: v.name }))} /></div>
+        <div><label htmlFor="lead-stylist">Stylist</label><Select id="lead-stylist" name="stylistId" defaultValue="" placeholder="Unassigned" options={[{ value: "", label: "Unassigned" }, ...meta.users.filter((v) => v.role === "STYLIST").map((v) => ({ value: v.id, label: v.name }))]} /></div>
+        <div><label htmlFor="lead-budget">Budget</label><input id="lead-budget" name="budget" type="number" min="0" /></div>
+        <div><label htmlFor="lead-event-date">Event date</label><input id="lead-event-date" name="eventDate" type="date" /></div>
+        <div><label htmlFor="lead-follow-up">Follow-up date</label><input id="lead-follow-up" name="followUpDate" type="datetime-local" /></div>
+        <div className="sm:col-span-2"><label htmlFor="lead-preferences">Preferences (comma separated)</label><input id="lead-preferences" name="preferences" placeholder="Pastels, lehenga, mirror work" /></div>
+        <div className="sm:col-span-2"><label htmlFor="lead-notes">Notes</label><textarea id="lead-notes" name="notes" rows={3} /></div>
         {error && <div className="sm:col-span-2"><InlineMessage message={error} /></div>}
       </form>
     </Drawer>
     {pageError && <div className="mb-4"><ErrorState message={pageError} retry={load} /></div>}
-    {!loading && leads.length > 0 && <section className="card mb-6 p-4"><div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center"><SearchInput value={search} onChange={setSearch} placeholder="Search name, phone, store or stylist" /><select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="ALL">All statuses</option>{["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", "LOST"].map(s => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}</select><select aria-label="Filter by source" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}><option value="ALL">All sources</option>{["WALK_IN", "SOCIAL_MEDIA", "CALL", "WHATSAPP", "REFERRAL", "OTHER"].map(s => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}</select><button type="button" onClick={clearFilters} disabled={!filtersActive} className="btn-ghost btn-sm whitespace-nowrap">Clear filters</button></div><p className="mt-3 text-xs text-stone-500">{filtered.length} of {leads.length} lead{leads.length === 1 ? "" : "s"}{filtersActive ? " match these filters" : ""}.</p></section>}
+    {!loading && leads.length > 0 && <section className="card mb-6 p-4"><div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center"><SearchInput value={search} onChange={setSearch} placeholder="Search name, phone, store or stylist" /><Select ariaLabel="Filter by status" value={statusFilter} onChange={setStatusFilter} className="md:w-44" searchable={false} options={[{ value: "ALL", label: "All statuses" }, ...["NEW", "CONTACTED", "FOLLOW_UP", "QUALIFIED", "CONVERTED", "LOST"].map((s) => ({ value: s, label: s.replaceAll("_", " ") }))]} /><Select ariaLabel="Filter by source" value={sourceFilter} onChange={setSourceFilter} className="md:w-44" searchable={false} options={[{ value: "ALL", label: "All sources" }, ...["WALK_IN", "SOCIAL_MEDIA", "CALL", "WHATSAPP", "REFERRAL", "OTHER"].map((s) => ({ value: s, label: s.replaceAll("_", " ") }))]} /><button type="button" onClick={clearFilters} disabled={!filtersActive} className="btn-ghost btn-sm whitespace-nowrap">Clear filters</button></div><p className="mt-3 text-xs text-stone-500">{filtered.length} of {leads.length} lead{leads.length === 1 ? "" : "s"}{filtersActive ? " match these filters" : ""}.</p></section>}
     {loading ? <LoadingState label="Loading leads..." /> : !leads.length ? <EmptyState icon={<UserRoundPlus size={22} />} title={canCreate ? "No leads yet" : "Nothing assigned to you"} message={canCreate ? "Capture your first enquiry to start assigning follow-ups and converting customers." : "No leads are assigned to your store or current access yet."} action={canCreate ? <button className="btn-primary" onClick={() => setShowForm(true)}>+ New lead</button> : undefined} /> : !filtered.length ? <EmptyState icon={<UserRoundPlus size={22} />} title="No matching leads" message="No leads match these filters. Clear them to see every lead." action={<button className="btn-secondary" onClick={clearFilters}>Clear filters</button>} /> : <div className="table-wrap"><table><thead><tr><th>Lead</th><th>Source</th><th>Store / Stylist</th><th>Budget</th><th>Follow-up</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filtered.map(lead => <tr key={lead.id}><td><strong>{lead.name}</strong><p className="text-xs text-stone-500">{lead.phone}</p></td><td>{lead.source.replaceAll("_", " ")}</td><td>{lead.store.name}<p className="text-xs text-stone-500">{lead.stylist?.name ?? "Unassigned"}</p></td><td>{lead.budget ? money(lead.budget) : "-"}</td><td>{lead.followUpDate ? shortDate(lead.followUpDate) : "-"}</td><td><StatusBadge value={lead.status} /></td><td>{canConvert && !lead.customer && lead.status !== "LOST" && <button disabled={convertingId === lead.id} onClick={() => convert(lead.id)} className="text-xs font-semibold text-wine">{convertingId === lead.id ? "Converting..." : "Convert"}</button>}</td></tr>)}</tbody></table></div>}
   </>;
 }

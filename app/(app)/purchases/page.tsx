@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Drawer } from "@/components/drawer";
+import { Select } from "@/components/ui";
 import { Download, Plus } from "lucide-react";
 import { api, money, shortDate, toast } from "@/lib/client";
 
@@ -118,7 +119,7 @@ export default function PurchasesPage() {
           </div>
         }
       />
-      <div className="card mb-5 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find purchases</h2><p className="text-xs text-stone-500">Search vendors and items, then focus on receipts that need action.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Purchase no., vendor or item"/><select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="ALL">All statuses</option>{["REQUESTED","ORDERED","RECEIVED","CANCELLED"].map((item)=><option key={item}>{item}</option>)}</select><select value={receiptFilter} onChange={(e)=>setReceiptFilter(e.target.value)}><option value="ALL">All receipts</option><option value="PENDING">Pending receipt</option><option value="RECEIVED">Received</option></select><select value={sort} onChange={(e)=>setSort(e.target.value)}><option value="NEWEST">Newest</option><option value="EXPECTED">Expected date</option><option value="AMOUNT">Amount: high to low</option></select><label className="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 normal-case tracking-normal"><input type="checkbox" className="h-4 w-4" checked={overdueOnly} onChange={(e)=>setOverdueOnly(e.target.checked)}/><span className="text-sm">Expected date overdue</span></label></div><p className="mt-3 text-xs text-stone-500">Showing {filteredPurchases.length} of {purchases.length} purchases.</p></div>
+      <div className="card mb-5 p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><h2 className="font-semibold">Find purchases</h2><p className="text-xs text-stone-500">Search vendors and items, then focus on receipts that need action.</p></div><button onClick={clearFilters} className="text-xs font-semibold text-wine">Clear filters</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Purchase no., vendor or item"/><Select value={statusFilter} onChange={setStatusFilter} searchable={false} ariaLabel="Filter by status" options={[{ value: "ALL", label: "All statuses" }, ...["REQUESTED","ORDERED","RECEIVED","CANCELLED"].map((item) => ({ value: item, label: item }))]} /><Select value={receiptFilter} onChange={setReceiptFilter} searchable={false} ariaLabel="Filter by receipt" options={[{ value: "ALL", label: "All receipts" }, { value: "PENDING", label: "Pending receipt" }, { value: "RECEIVED", label: "Received" }]} /><Select value={sort} onChange={setSort} searchable={false} ariaLabel="Sort" options={[{ value: "NEWEST", label: "Newest" }, { value: "EXPECTED", label: "Expected date" }, { value: "AMOUNT", label: "Amount: high to low" }]} /><label className="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 normal-case tracking-normal"><input type="checkbox" className="h-4 w-4" checked={overdueOnly} onChange={(e)=>setOverdueOnly(e.target.checked)}/><span className="text-sm">Expected date overdue</span></label></div><p className="mt-3 text-xs text-stone-500">Showing {filteredPurchases.length} of {purchases.length} purchases.</p></div>
 
       <Drawer
         open={showCreate}
@@ -295,22 +296,18 @@ export default function PurchasesPage() {
                     />
                     <label className="block">
                       <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Category</span>
-                      <select
+                      <Select
                         className="mt-1"
                         value={receiveLines[line.id]?.category || "OTHER"}
-                        onChange={(e) =>
+                        onChange={(v) =>
                           setReceiveLines((prev) => ({
                             ...prev,
-                            [line.id]: { ...prev[line.id], category: e.target.value },
+                            [line.id]: { ...prev[line.id], category: v },
                           }))
                         }
-                      >
-                        <option value="FABRIC">FABRIC</option>
-                        <option value="FINISHED_GOOD">FINISHED_GOOD</option>
-                        <option value="ACCESSORY">ACCESSORY</option>
-                        <option value="PACKAGING">PACKAGING</option>
-                        <option value="OTHER">OTHER</option>
-                      </select>
+                        searchable={false}
+                        options={["FABRIC", "FINISHED_GOOD", "ACCESSORY", "PACKAGING", "OTHER"].map((c) => ({ value: c, label: c }))}
+                      />
                     </label>
                   </div>
                 </div>

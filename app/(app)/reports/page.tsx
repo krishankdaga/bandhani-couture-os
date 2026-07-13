@@ -5,12 +5,13 @@ import Link from "next/link";
 import { CalendarDays, ChevronDown, Download, Search } from "lucide-react";
 import { LoadingState } from "@/components/async-state";
 import { PageHeader } from "@/components/page-header";
+import { Select } from "@/components/ui";
 import { api, money } from "@/lib/client";
 
 type Summary = { leads: number; customers: number; orders: number; delayedOrders: number; inventoryItems: number; lowStock: number; purchases: number; incentivePayable: number };
 type Analytics = {
   range: { from: string; to: string };
-  sales: { totalRevenue: number; totalCollected: number; outstanding: number; orderCount: number; cancelledCount: number; averageOrderValue: number; byMonth: Array<{ month: string; revenue: number; orders: number }> };
+  sales: { totalRevenue: number; totalCollected: number; outstanding: number; orderCount: number; cancelledCount: number; averageOrderValue: number; byMonth: Array<{ month: string; revenue: number; orders: number }>; byCustomer: Array<{ id: string; name: string; orders: number; revenue: number; collected: number; outstanding: number; share: number }> };
   leads: { total: number; converted: number; lost: number; conversionRate: number; bySource: Array<{ source: string; total: number; converted: number; rate: number }> };
   employees: Array<{ id: string; name: string; role: string; leads: number; conversions: number; conversionRate: number; sales: number; salesValue: number; stagesCompleted: number; delaysCaused: number }>;
   inventory: { stockValue: number; shortageItems: number; itemCount: number };
@@ -139,7 +140,7 @@ export default function ReportsPage() {
   ].filter((link) => permissions.includes(link.perm));
 
   const cards = summary ? [
-    ["Leads", summary.leads], ["Customers", summary.customers], ["Orders", summary.orders], ["Delayed Orders", summary.delayedOrders],
+    ["Leads", summary.leads], ["Customers", summary.customers], ["Orders", summary.orders], ["Delayed / At-risk Orders", summary.delayedOrders],
     ["Inventory Items", summary.inventoryItems], ["Low Stock Watch", summary.lowStock], ["Purchases", summary.purchases], ["Incentive Payable", money(summary.incentivePayable)],
   ] as const : [];
   const maxRevenue = analytics?.sales.byMonth.reduce((m, r) => Math.max(m, r.revenue), 0) ?? 0;
@@ -184,10 +185,7 @@ export default function ReportsPage() {
           {isOwner && (
             <div className="w-44">
               <label>Store</label>
-              <select className="h-10" value={storeId} onChange={(e) => setStoreId(e.target.value)}>
-                <option value="all">All Stores</option>
-                {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-              </select>
+              <Select value={storeId} onChange={setStoreId} options={[{ value: "all", label: "All Stores" }, ...stores.map((store) => ({ value: store.id, label: store.name }))]} />
             </div>
           )}
           <div className={`w-40 ${allTime ? "opacity-40 pointer-events-none" : ""}`}>
@@ -236,7 +234,7 @@ export default function ReportsPage() {
           <h2 className="font-semibold">Store comparison</h2>
           <p className="text-xs text-stone-500">Key metrics per store for the selected date range. Low stock reflects current inventory.</p>
           <div className="mt-4 table-wrap"><table><thead><tr>
-            <th>Store</th><th className="text-right">Orders</th><th className="text-right">Order value</th><th className="text-right">Delayed</th><th className="text-right">Leads</th><th className="text-right">Customers</th><th className="text-right">Pending POs</th><th className="text-right">Low stock</th>
+            <th>Store</th><th className="text-right">Orders</th><th className="text-right">Order value</th><th className="text-right">Delayed / at-risk</th><th className="text-right">Leads</th><th className="text-right">Customers</th><th className="text-right">Pending POs</th><th className="text-right">Low stock</th>
           </tr></thead><tbody>
             {comparison.map((row) => (
               <tr key={row.storeId}>
@@ -276,6 +274,35 @@ export default function ReportsPage() {
               ))}
             </div>
           )}
+
+          {/* Who the customers are + their share of sales for the selected filters. */}
+          <div className="mt-6 border-t border-stone-100 pt-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Sales by customer</h3>
+              <span className="text-xs text-stone-400">{analytics.sales.byCustomer.length} customer{analytics.sales.byCustomer.length === 1 ? "" : "s"} in range</span>
+            </div>
+            {analytics.sales.byCustomer.length > 0 ? (
+              <div className="mt-4 table-wrap"><table><thead><tr>
+                <th>Customer</th><th className="text-right">Orders</th><th className="text-right">Revenue</th><th className="text-right">Collected</th><th className="text-right">Outstanding</th><th className="text-right">% of sales</th>
+              </tr></thead><tbody>
+                {analytics.sales.byCustomer.map((c) => (
+                  <tr key={c.id}>
+                    <td><Link href={`/customers/${c.id}`} className="font-medium text-wine hover:underline">{c.name}</Link></td>
+                    <td className="text-right">{c.orders}</td>
+                    <td className="text-right font-medium">{money(c.revenue)}</td>
+                    <td className="text-right text-emerald-700">{money(c.collected)}</td>
+                    <td className="text-right">{c.outstanding > 0 ? <span className="font-semibold text-red-600">{money(c.outstanding)}</span> : money(0)}</td>
+                    <td className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-wine" style={{ width: `${c.share}%` }} /></div>
+                        <span className="w-9 text-right text-xs text-stone-500">{c.share}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody></table></div>
+            ) : <p className="mt-4 text-sm text-stone-400">No customer sales in this period.</p>}
+          </div>
         </section>}
 
         {/* Lead conversion */}

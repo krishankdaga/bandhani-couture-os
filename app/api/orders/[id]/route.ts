@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isApiError, requireOwner, requireUser, validationError } from "@/lib/api";
 import { writeAudit } from "@/lib/audit";
+import { syncDelayStates } from "@/lib/delay-sync";
 import { prisma } from "@/lib/prisma";
 import { storeScope } from "@/lib/scope";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const user = await requireUser(request, "orders.view");
   if (isApiError(user)) return user;
+  await syncDelayStates();
   const { id } = await context.params;
   const order = await prisma.order.findFirst({
     where: { id, ...storeScope(user) },

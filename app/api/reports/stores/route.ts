@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isApiError, requireUser, validationError } from "@/lib/api";
+import { syncDelayStates } from "@/lib/delay-sync";
 import { dateRangeScope } from "@/lib/report-filters";
 import { prisma } from "@/lib/prisma";
 import { resolveOptionalStoreScope, resolveStoreScope } from "@/lib/scope";
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
   if (isApiError(user)) return user;
 
   try {
+    await syncDelayStates();
     const url = new URL(request.url);
     const requestedStoreId = url.searchParams.get("storeId");
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, ClipboardList, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { QuickViews, SearchInput } from "@/components/ui";
+import { QuickViews, SearchInput, Select } from "@/components/ui";
 import { api, money, shortDate, toast } from "@/lib/client";
 import { EmptyState, ErrorState, InlineMessage, LoadingState } from "@/components/async-state";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -113,8 +113,15 @@ export default function OrdersPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  // Pre-fill the search box from ?search= so global-search and assistant deep links land filtered.
-  useEffect(() => { const q = new URLSearchParams(window.location.search).get("search"); if (q) setSearch(q); }, []);
+  // Pre-fill filters from URL params so global-search, the assistant and the
+  // command-center cards can deep-link straight to a filtered list.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("search"); if (q) setSearch(q);
+    const status = params.get("status"); if (status) setStatusFilter(status);
+    const delay = params.get("delay"); if (delay) setDelayFilter(delay);
+    const v = params.get("view"); if (v && ["ALL", "ATTENTION", "DUE_WEEK", "IN_PROD", "READY"].includes(v)) setView(v as OrderView);
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -316,7 +323,7 @@ export default function OrdersPage() {
 
           {/* ── Customer combobox ── */}
           <div ref={custDropRef} className="relative">
-            <label>Customer</label>
+            <label htmlFor="order-customer-search">Customer</label>
             {selectedCust ? (
               /* Selected state — show name with a clear button */
               <div className="flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 shadow-sm">
@@ -336,6 +343,7 @@ export default function OrdersPage() {
             ) : (
               /* Search state */
               <input
+                id="order-customer-search"
                 type="text"
                 value={custSearch}
                 onChange={(e) => { setCustSearch(e.target.value); setShowCustDrop(true); }}
@@ -383,27 +391,16 @@ export default function OrdersPage() {
             )}
           </div>
 
-          <div><label>Stylist</label><select name="stylistId" required><option value="">Select</option>{meta.users.filter((v) => v.role === "STYLIST").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+          <div><label htmlFor="order-stylist">Stylist</label><Select id="order-stylist" name="stylistId" required defaultValue="" placeholder="Select" options={meta.users.filter((v) => v.role === "STYLIST").map((v) => ({ value: v.id, label: v.name }))} /></div>
           <div>
-            <label>Production manager <span className="font-normal text-stone-400">(assign now or later)</span></label>
-            <select name="productionManagerId">
-              <option value="">Assign later</option>
-              {meta.users.filter((v) => v.role === "PRODUCTION_MANAGER").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            <label htmlFor="order-production-manager">Production manager <span className="font-normal text-stone-400">(assign now or later)</span></label>
+            <Select id="order-production-manager" name="productionManagerId" defaultValue="" placeholder="Assign later" options={[{ value: "", label: "Assign later" }, ...meta.users.filter((v) => v.role === "PRODUCTION_MANAGER").map((v) => ({ value: v.id, label: v.name }))]} />
           </div>
           <div>
-            <label>Store</label>
-            <select
-              name="storeId"
-              required
-              value={formStoreId}
-              onChange={(e) => setFormStoreId(e.target.value)}
-            >
-              <option value="">Select</option>
-              {meta.stores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            <label htmlFor="order-store">Store</label>
+            <Select id="order-store" name="storeId" required value={formStoreId} onChange={setFormStoreId} placeholder="Select" options={meta.stores.map((v) => ({ value: v.id, label: v.name }))} />
           </div>
-          <div><label>Order value</label><input name="orderValue" type="number" min="1" required /></div>
+          <div><label htmlFor="order-value">Order value</label><input id="order-value" name="orderValue" type="number" min="1" required /></div>
 
           {/* ── Quick-create customer form ── */}
           {showNewCust && canCreateCustomer && (
@@ -424,24 +421,27 @@ export default function OrdersPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
-                  <label>Name <span className="text-red-500">*</span></label>
+                  <label htmlFor="new-cust-name">Name <span className="text-red-500">*</span></label>
                   <input
+                    id="new-cust-name"
                     value={newCust.name}
                     onChange={(e) => setNewCust((p) => ({ ...p, name: e.target.value }))}
                     placeholder="Priya Sharma"
                   />
                 </div>
                 <div>
-                  <label>Phone <span className="text-red-500">*</span></label>
+                  <label htmlFor="new-cust-phone">Phone <span className="text-red-500">*</span></label>
                   <input
+                    id="new-cust-phone"
                     value={newCust.phone}
                     onChange={(e) => setNewCust((p) => ({ ...p, phone: e.target.value }))}
                     placeholder="+91 98765 43210"
                   />
                 </div>
                 <div>
-                  <label>Email <span className="font-normal text-stone-400">(optional)</span></label>
+                  <label htmlFor="new-cust-email">Email <span className="font-normal text-stone-400">(optional)</span></label>
                   <input
+                    id="new-cust-email"
                     type="email"
                     value={newCust.email}
                     onChange={(e) => setNewCust((p) => ({ ...p, email: e.target.value }))}
@@ -449,16 +449,18 @@ export default function OrdersPage() {
                   />
                 </div>
                 <div>
-                  <label>Address <span className="font-normal text-stone-400">(optional)</span></label>
+                  <label htmlFor="new-cust-address">Address <span className="font-normal text-stone-400">(optional)</span></label>
                   <input
+                    id="new-cust-address"
                     value={newCust.address}
                     onChange={(e) => setNewCust((p) => ({ ...p, address: e.target.value }))}
                     placeholder="City, locality"
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label>Preferences <span className="font-normal text-stone-400">(comma separated, optional)</span></label>
+                  <label htmlFor="new-cust-preferences">Preferences <span className="font-normal text-stone-400">(comma separated, optional)</span></label>
                   <input
+                    id="new-cust-preferences"
                     value={newCust.preferences}
                     onChange={(e) => setNewCust((p) => ({ ...p, preferences: e.target.value }))}
                     placeholder="e.g. Anarkali, Lehenga, pastels"
@@ -487,24 +489,24 @@ export default function OrdersPage() {
             </div>
           )}
 
-          {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label>{l}</label><input key={`${selectedCustId}-${n}`} name={n} required placeholder="inches" defaultValue={stdPrefill[n] ?? ""} /></div>)}
+          {[["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]].map(([n, l]) => <div key={n}><label htmlFor={`order-measure-${n}`}>{l}</label><input key={`${selectedCustId}-${n}`} id={`order-measure-${n}`} name={n} required placeholder="inches" defaultValue={stdPrefill[n] ?? ""} /></div>)}
           <div className="sm:col-span-2">
             <div className="flex items-center justify-between"><label className="mb-0">Custom measurements</label><button type="button" onClick={addCustomMeasurement} className="btn-secondary btn-sm flex items-center gap-1"><Plus size={13} />Add</button></div>
             {customMeasurements.map((cm, i) => (
               <div key={i} className="mt-2 grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-4"><label className="text-xs">Name</label><input value={cm.name} onChange={(e) => updateCustomMeasurement(i, "name", e.target.value)} placeholder="e.g. Shoulder Drop" /></div>
-                <div className="col-span-3"><label className="text-xs">Value</label><input value={cm.value} onChange={(e) => updateCustomMeasurement(i, "value", e.target.value)} placeholder="inches" /></div>
-                <div className="col-span-4"><label className="text-xs">Notes (optional)</label><input value={cm.notes} onChange={(e) => updateCustomMeasurement(i, "notes", e.target.value)} placeholder="e.g. at booking" /></div>
+                <div className="col-span-4"><label className="text-xs" htmlFor={`custom-measure-name-${i}`}>Name</label><input id={`custom-measure-name-${i}`} value={cm.name} onChange={(e) => updateCustomMeasurement(i, "name", e.target.value)} placeholder="e.g. Shoulder Drop" /></div>
+                <div className="col-span-3"><label className="text-xs" htmlFor={`custom-measure-value-${i}`}>Value</label><input id={`custom-measure-value-${i}`} value={cm.value} onChange={(e) => updateCustomMeasurement(i, "value", e.target.value)} placeholder="inches" /></div>
+                <div className="col-span-4"><label className="text-xs" htmlFor={`custom-measure-notes-${i}`}>Notes (optional)</label><input id={`custom-measure-notes-${i}`} value={cm.notes} onChange={(e) => updateCustomMeasurement(i, "notes", e.target.value)} placeholder="e.g. at booking" /></div>
                 <div className="col-span-1 flex justify-end pb-0.5"><button type="button" onClick={() => removeCustomMeasurement(i)} className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600"><X size={14} /></button></div>
               </div>
             ))}
           </div>
-          <div><label>Priority</label><select name="priority"><option>NORMAL</option><option>HIGH</option><option>URGENT</option></select></div>
-          <div><label>Delivery date</label><input name="deliveryDate" type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} required /></div>
-          <div><label>Advance received <span className="font-normal text-stone-400">(optional)</span></label><input name="advanceAmount" type="number" min="1" step="1" placeholder="₹ amount" /></div>
-          <div><label>Advance via</label><select name="advanceMethod"><option value="CASH">Cash</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="BANK_TRANSFER">Bank transfer</option><option value="CHEQUE">Cheque</option><option value="OTHER">Other</option></select></div>
-          <div className="sm:col-span-2"><label>Customisations (comma separated)</label><input name="customisations" /></div>
-          <div className="sm:col-span-2"><label>Reference image URLs (comma separated)</label><input name="referenceImages" placeholder="https://example.com/reference.jpg" /></div>
+          <div><label htmlFor="order-priority">Priority</label><Select id="order-priority" name="priority" defaultValue="NORMAL" searchable={false} options={[{ value: "NORMAL", label: "NORMAL" }, { value: "HIGH", label: "HIGH" }, { value: "URGENT", label: "URGENT" }]} /></div>
+          <div><label htmlFor="order-delivery-date">Delivery date</label><input id="order-delivery-date" name="deliveryDate" type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} required /></div>
+          <div><label htmlFor="order-advance-amount">Advance received <span className="font-normal text-stone-400">(optional)</span></label><input id="order-advance-amount" name="advanceAmount" type="number" min="1" step="1" placeholder="₹ amount" /></div>
+          <div><label htmlFor="order-advance-method">Advance via</label><Select id="order-advance-method" name="advanceMethod" defaultValue="CASH" searchable={false} options={[{ value: "CASH", label: "Cash" }, { value: "UPI", label: "UPI" }, { value: "CARD", label: "Card" }, { value: "BANK_TRANSFER", label: "Bank transfer" }, { value: "CHEQUE", label: "Cheque" }, { value: "OTHER", label: "Other" }]} /></div>
+          <div className="sm:col-span-2"><label htmlFor="order-customisations">Customisations (comma separated)</label><input id="order-customisations" name="customisations" /></div>
+          <div className="sm:col-span-2"><label htmlFor="order-reference-images">Reference image URLs (comma separated)</label><input id="order-reference-images" name="referenceImages" placeholder="https://example.com/reference.jpg" /></div>
           {error && <div className="sm:col-span-2"><InlineMessage message={error} /></div>}
         </form>
       </Drawer>
@@ -516,16 +518,8 @@ export default function OrdersPage() {
           <div className="mb-3"><QuickViews views={orderViews} value={view} onChange={setView} /></div>
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center">
             <SearchInput value={search} onChange={setSearch} placeholder="Search order, customer, phone or stylist" />
-            <select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="ALL">All statuses</option>
-              {["DRAFT", "CONFIRMED", "IN_PRODUCTION", "READY", "DELIVERED", "CANCELLED"].map((s) => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}
-            </select>
-            <select aria-label="Filter by delivery health" value={delayFilter} onChange={(e) => setDelayFilter(e.target.value)}>
-              <option value="ALL">All delivery health</option>
-              <option value="GREEN">On track</option>
-              <option value="YELLOW">At risk</option>
-              <option value="RED">Delayed</option>
-            </select>
+            <Select ariaLabel="Filter by status" value={statusFilter} onChange={setStatusFilter} className="md:w-44" options={[{ value: "ALL", label: "All statuses" }, ...["DRAFT", "CONFIRMED", "IN_PRODUCTION", "READY", "DELIVERED", "CANCELLED"].map((s) => ({ value: s, label: s.replaceAll("_", " ") }))]} />
+            <Select ariaLabel="Filter by delivery health" value={delayFilter} onChange={setDelayFilter} searchable={false} className="md:w-44" options={[{ value: "ALL", label: "All delivery health" }, { value: "GREEN", label: "On track" }, { value: "YELLOW", label: "At risk" }, { value: "RED", label: "Delayed" }]} />
             <button type="button" onClick={clearFilters} disabled={!filtersActive} className="btn-ghost btn-sm whitespace-nowrap">Clear filters</button>
           </div>
           <p className="mt-3 text-xs text-stone-500">{filtered.length} of {orders.length} order{orders.length === 1 ? "" : "s"}{filtersActive ? " match these filters" : ""}.</p>
@@ -586,7 +580,11 @@ export default function OrdersPage() {
                     <Link href={`/orders/${o.id}`} className="block text-sm">{o.stylist.name}</Link>
                   </td>
                   <td className="px-5 py-3">
-                    <Link href={`/orders/${o.id}`} className="block text-sm">{shortDate(o.deliveryDate)}</Link>
+                    <Link href={`/orders/${o.id}`} className="block text-sm">
+                      {new Date(o.deliveryDate) < new Date() && !["DELIVERED", "CANCELLED"].includes(o.status)
+                        ? <span className="font-medium text-red-600">{shortDate(o.deliveryDate)}<span className="block text-[11px] font-normal">overdue</span></span>
+                        : shortDate(o.deliveryDate)}
+                    </Link>
                   </td>
                   <td className="px-5 py-3">
                     <Link href={`/orders/${o.id}`} className="block"><StatusBadge value={o.status} /></Link>

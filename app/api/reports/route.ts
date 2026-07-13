@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isApiError, requireUser, validationError } from "@/lib/api";
+import { syncDelayStates } from "@/lib/delay-sync";
 import { prisma } from "@/lib/prisma";
 import { dateRangeScope } from "@/lib/report-filters";
 import { resolveOptionalStoreScope, resolveStoreScope } from "@/lib/scope";
@@ -8,6 +9,7 @@ import { resolveOptionalStoreScope, resolveStoreScope } from "@/lib/scope";
 export async function GET(request: NextRequest) {
   const user = await requireUser(request, "reports.view");
   if (isApiError(user)) return user;
+  await syncDelayStates();
 
   try {
     const url = new URL(request.url);

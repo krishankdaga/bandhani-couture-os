@@ -6,6 +6,7 @@ import { Download, Plus } from "lucide-react";
 import { api, money, toast } from "@/lib/client";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Drawer } from "@/components/drawer";
+import { Select } from "@/components/ui";
 
 const categories = ["FABRIC", "FINISHED_GOOD", "ACCESSORY", "PACKAGING", "OTHER"];
 const UNITS = ["metres", "yards", "pcs", "rolls", "kg", "grams", "litres", "sets", "pairs"];
@@ -172,7 +173,7 @@ export default function InventoryPage() {
           </div>
         }
       />
-      <div className="card mb-5 p-4"><div className="mb-3"><h2 className="font-semibold">Find inventory</h2><p className="text-xs text-stone-500">Search stock, focus on low quantities, or sort by value.</p></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search SKU, name or category"/><select value={categoryFilter} onChange={(e)=>setCategoryFilter(e.target.value)}><option value="ALL">All categories</option>{categories.map((item)=><option key={item}>{item}</option>)}</select><select value={movementFilter} onChange={(e)=>setMovementFilter(e.target.value)}><option value="ALL">All movements</option><option value="IN">Stock In</option><option value="OUT">Stock Out</option><option value="ADJUSTMENT">Adjustment</option></select><select value={sort} onChange={(e)=>setSort(e.target.value)}><option value="NEWEST">Newest</option><option value="NAME">Name</option><option value="QUANTITY">Quantity: low to high</option><option value="VALUE">Stock value: high to low</option></select><label className="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 normal-case tracking-normal"><input type="checkbox" className="h-4 w-4" checked={lowOnly} onChange={(e)=>setLowOnly(e.target.checked)}/><span className="text-sm">Low stock only</span></label></div><p className="mt-3 text-xs text-stone-500">Showing {filteredItems.length} of {items.length} items.</p></div>
+      <div className="card mb-5 p-4"><div className="mb-3"><h2 className="font-semibold">Find inventory</h2><p className="text-xs text-stone-500">Search stock, focus on low quantities, or sort by value.</p></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search SKU, name or category"/><Select value={categoryFilter} onChange={setCategoryFilter} ariaLabel="Filter by category" options={[{ value: "ALL", label: "All categories" }, ...categories.map((item) => ({ value: item, label: item }))]} /><Select value={movementFilter} onChange={setMovementFilter} searchable={false} ariaLabel="Filter by movement" options={[{ value: "ALL", label: "All movements" }, { value: "IN", label: "Stock In" }, { value: "OUT", label: "Stock Out" }, { value: "ADJUSTMENT", label: "Adjustment" }]} /><Select value={sort} onChange={setSort} searchable={false} ariaLabel="Sort" options={[{ value: "NEWEST", label: "Newest" }, { value: "NAME", label: "Name" }, { value: "QUANTITY", label: "Quantity: low to high" }, { value: "VALUE", label: "Stock value: high to low" }]} /><label className="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 normal-case tracking-normal"><input type="checkbox" className="h-4 w-4" checked={lowOnly} onChange={(e)=>setLowOnly(e.target.checked)}/><span className="text-sm">Low stock only</span></label></div><p className="mt-3 text-xs text-stone-500">Showing {filteredItems.length} of {items.length} items.</p></div>
 
       <div className="card overflow-hidden">
           <div className="border-b border-stone-100 px-5 py-4">
@@ -268,15 +269,11 @@ export default function InventoryPage() {
           <Input label="Item Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Category</span>
-            <select className="mt-1" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-              {categories.map((c) => <option key={c}>{c}</option>)}
-            </select>
+            <Select className="mt-1" value={form.category} onChange={(v) => setForm({ ...form, category: v })} options={categories.map((c) => ({ value: c, label: c }))} />
           </label>
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Unit</span>
-            <select className="mt-1" value={UNITS.includes(form.unit) ? form.unit : "pcs"} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
-              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
+            <Select className="mt-1" value={UNITS.includes(form.unit) ? form.unit : "pcs"} onChange={(v) => setForm({ ...form, unit: v })} options={UNITS.map((u) => ({ value: u, label: u }))} />
           </label>
           {!editingId && <Input label="Opening Quantity" type="number" value={form.quantity} onChange={(v) => setForm({ ...form, quantity: Number(v) })} />}
           <Input label="Reorder Level" type="number" value={form.reorderAt} onChange={(v) => setForm({ ...form, reorderAt: v })} />
@@ -301,7 +298,7 @@ export default function InventoryPage() {
               <p><span className="text-stone-400">Reserved</span><br /><span className="numeral text-lg">{Number(movementItem.reserved ?? 0)}</span> {movementItem.unit}</p>
             </div>
             <form id="movement-form" onSubmit={saveMovement} className="grid gap-4 sm:grid-cols-2">
-              <div><label htmlFor="movement-type">Type</label><select id="movement-type" value={movement.type} onChange={(e) => setMovement({ ...movement, type: e.target.value })}><option value="IN">Stock In</option><option value="OUT">Stock Out</option><option value="ADJUSTMENT">Adjustment</option></select></div>
+              <div><label htmlFor="movement-type">Type</label><Select id="movement-type" value={movement.type} onChange={(v) => setMovement({ ...movement, type: v })} searchable={false} options={[{ value: "IN", label: "Stock In" }, { value: "OUT", label: "Stock Out" }, { value: "ADJUSTMENT", label: "Adjustment" }]} /></div>
               <div><label htmlFor="movement-qty">Quantity</label><input id="movement-qty" type="number" placeholder="Quantity" value={movement.quantity} onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })} /></div>
               <div className="sm:col-span-2"><label htmlFor="movement-reason">Reason</label><input id="movement-reason" placeholder="Reason" value={movement.reason} onChange={(e) => setMovement({ ...movement, reason: e.target.value })} /></div>
               <div className="sm:col-span-2"><label htmlFor="movement-ref">Reference <span className="font-normal text-stone-400">(optional)</span></label><input id="movement-ref" placeholder="Reference" value={movement.reference} onChange={(e) => setMovement({ ...movement, reference: e.target.value })} /></div>

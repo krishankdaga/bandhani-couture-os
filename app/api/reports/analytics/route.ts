@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const [orders, leads, stages, users, inventory] = await Promise.all([
       prisma.order.findMany({
         where: { ...scope, createdAt: range },
-        select: { id: true, orderValue: true, status: true, delayState: true, createdAt: true, stylist: { select: { id: true, name: true } }, payments: { select: { amount: true, kind: true, paidAt: true } } },
+        select: { id: true, orderValue: true, status: true, delayState: true, createdAt: true, customer: { select: { id: true, name: true } }, stylist: { select: { id: true, name: true } }, payments: { select: { amount: true, kind: true, paidAt: true } } },
       }),
       prisma.lead.findMany({
         where: { ...scope, createdAt: range },
@@ -60,6 +60,20 @@ export async function GET(request: NextRequest) {
       salesByMonthMap.set(key, cur);
     }
     const salesByMonth = [...salesByMonthMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([month, v]) => ({ month, ...v }));
+
+    // --- Sales by customer (who the customers are + their share of sales) ---
+    type CustAgg = { id: string; name: string; orders: number; revenue: number; collected: number };
+    const byCustomerMap = new Map<string, CustAgg>();
+    for (const o of orders) {
+      if (!o.customer) continue;
+      const cur = byCustomerMap.get(o.customer.id) ?? { id: o.customer.id, name: o.customer.name, orders: 0, revenue: 0, collected: 0 };
+      cur.collected += o.payments.reduce((ps, p) => ps + (p.kind === "REFUND" ? -Number(p.amount) : Number(p.amount)), 0);
+      if (o.status !== "CANCELLED") { cur.revenue += Number(o.orderValue); cur.orders += 1; }
+      byCustomerMap.set(o.customer.id, cur);
+    }
+    const salesByCustomer = [...byCustomerMap.values()]
+      .map((c) => ({ ...c, outstanding: Math.max(0, c.revenue - c.collected), share: totalRevenue ? Math.round((c.revenue / totalRevenue) * 100) : 0 }))
+      .sort((a, b) => b.revenue - a.revenue);
 
     // --- Lead conversion ---
     const convertedLeads = leads.filter((l) => l.status === "CONVERTED");
@@ -104,6 +118,7 @@ export async function GET(request: NextRequest) {
         cancelledCount: orders.length - billed.length,
         averageOrderValue: billed.length ? Math.round(totalRevenue / billed.length) : 0,
         byMonth: salesByMonth,
+        byCustomer: salesByCustomer,
       },
       leads: {
         total: leads.length,

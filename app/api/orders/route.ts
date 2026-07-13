@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isApiError, requireAnyPermission, requireUser, validationError } from "@/lib/api";
 import { writeAudit } from "@/lib/audit";
+import { syncDelayStates } from "@/lib/delay-sync";
 import { ORDER_WRITE_ROLES } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -41,6 +42,9 @@ function stageSchedule(deliveryDate: Date) {
 export async function GET(request: NextRequest) {
   const user = await requireAnyPermission(request, ["orders.view", "production.view"]);
   if (isApiError(user)) return user;
+  // Stored delay states drift as due dates pass; refresh them so the list
+  // matches the live numbers on the dashboard and command center.
+  await syncDelayStates();
   const orders = await prisma.order.findMany({
     where: user.storeId && !["OWNER", "PARTNER"].includes(user.role) ? { storeId: user.storeId } : {},
     include: { customer: { select: { id: true, name: true, phone: true } }, stylist: { select: { id: true, name: true } }, productionManager: { select: { id: true, name: true } }, stages: { include: { owner: { select: { id: true, name: true } }, pardons: { include: { requestedBy: { select: { name: true } } }, orderBy: { createdAt: "desc" } } }, orderBy: { sequence: "asc" } } },

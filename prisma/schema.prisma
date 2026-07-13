@@ -243,6 +243,23 @@ model Customer {
   @@index([storeId])
 }
 
+/// External vendors/suppliers (dyers, tailors, embroiderers, fabric suppliers).
+/// Maintained from Administration → Vendors, with a profile page per vendor.
+model Vendor {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  panNo     String?
+  address   String?
+  email     String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
 model Interaction {
   id         String          @id @default(cuid())
   customerId String
