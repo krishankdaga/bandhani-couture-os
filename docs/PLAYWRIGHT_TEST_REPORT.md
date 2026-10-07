@@ -10,10 +10,6 @@
 ## Setup
 
 - **Playwright installed:** Yes — `@playwright/test` added as a dev dependency and Chromium downloaded.
-- **Playwright MCP:** Not configured. To wire it into Claude, run:
-  ```
-  claude mcp add playwright npx @playwright/mcp@latest
-  ```
 - **Database:** The dev DB initially held only 3 of the 10 seed accounts (`owner@`, `manager@`,
   `stylist@`) — `employee@cbos.local` was missing. Ran the **non-destructive** seed
   (`npm run seed`, all upserts) to restore the full demo account set. See Finding #1.

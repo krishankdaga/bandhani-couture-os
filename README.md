@@ -4,6 +4,42 @@
 
 Internal ERP for couture CRM, orders, production, inventory, purchases, pricing, reports, incentives, WhatsApp workflows, employees, and role-based access.
 
+## Architecture
+
+```
+Browser (React 19 client components)
+   │  fetch() via lib/client.ts
+   ▼
+Next.js 15 App Router
+   ├─ middleware.ts         redirects to /login when there is no session cookie
+   ├─ app/(app)/*           24 pages: dashboard, orders, production, inventory, ...
+   ├─ app/(auth)/login      sign-in page
+   └─ app/api/*/route.ts    65 route handlers that authorise the caller themselves
+          │
+          ├─ lib/auth.ts         verifies the signed JWT cookie, reloads the user from the DB
+          ├─ lib/permissions.ts  turns role + per-user overrides into a permission list
+          ├─ lib/scope.ts        limits non-owners to their own store's records
+          └─ lib/prisma.ts       Prisma client
+                 │
+                 ▼
+            PostgreSQL (25 Prisma models)
+```
+
+- **Most pages** are client components that load their data from the API, usually in parallel with `Promise.all`.
+- **Every API route checks access on the server** (apart from login, logout and the health check). The sidebar hides modules a user can't use, but that is only convenience; the real check is `requireUser(request, "orders.edit")` (see `lib/api.ts`) at the top of each handler.
+- **Shared UI** lives in `components/`: the slide-in `Drawer`, `ConfirmDialog`, toasts, the `Cmd+K` global search and the notification centre.
+
+## Key design decisions
+
+- **Permissions are re-read on every request.** The JWT only proves who you are. Your permissions are loaded fresh from the database each time, so when the owner changes a role or deactivates someone, it takes effect on their next click instead of when the 12-hour token expires. The trade-off is one extra query per request, which is fine at this scale.
+- **Roles plus per-user overrides.** A role gives a default set of permissions; an override can grant or remove a single permission for one employee. `resolvePermissions` applies the role first, then the overrides, and returns the list in a fixed order so it's easy to test.
+- **Store scoping is enforced in the query, not the UI.** `storeScope(user)` is spread into Prisma `where` clauses, so a store manager can't see another store's data even by calling the API directly.
+- **Search is fast and safe.** The search box waits 250 ms after typing stops, cancels the previous request with an `AbortController`, and the API runs the five entity searches in parallel, returns at most six results each, selects only the fields shown, and skips any entity the user has no permission to view.
+- **Accessible drawers and dialogs instead of native `confirm()` / `prompt()`.** The drawer traps focus, closes on Escape, locks page scroll and returns focus to the button that opened it.
+- **Tests gate each release:** `tsc --noEmit`, unit tests for permissions, delays, CSV and navigation (`npm test`), and Playwright end-to-end smoke tests (`npm run test:e2e`).
+
+Design notes, QA reports and roadmaps are in [`docs/`](docs/).
+
 ## Required environment
 
 Copy `.env.example` to `.env` and configure:
